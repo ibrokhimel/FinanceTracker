@@ -10,7 +10,8 @@ import { predict, formatPrediction } from '../tools/predictor.js';
  */
 export async function handlePredict(bot, msg) {
   const chatId = msg.chat.id;
-  const userId = msg.from.id;
+  const userId = msg.user?.id;
+  if (!userId) return bot.sendMessage(chatId, '❌ Could not identify your account.');
 
   try {
     const now = new Date();

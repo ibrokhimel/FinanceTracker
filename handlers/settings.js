@@ -2,7 +2,6 @@
  * Settings handler — /start, /settings, /help commands.
  */
 
-import { findOrCreateUser, getUser } from '../db/queries/users.js';
 import { updateUser } from '../db/queries/users.js';
 import { buildWelcome } from '../tools/reportBuilder.js';
 
@@ -11,7 +10,6 @@ import { buildWelcome } from '../tools/reportBuilder.js';
  */
 export async function handleStart(bot, msg) {
   const chatId = msg.chat.id;
-  const userId = msg.from.id;
   const firstName = msg.from.first_name || 'User';
 
   await bot.sendMessage(chatId, buildWelcome(firstName), { parse_mode: 'Markdown' });
@@ -22,11 +20,9 @@ export async function handleStart(bot, msg) {
  */
 export async function handleSettings(bot, msg) {
   const chatId = msg.chat.id;
-  const userId = msg.from.id;
+  const user = msg.user;
+  if (!user) return bot.sendMessage(chatId, '❌ Could not identify your account.');
   const args = msg.text.split(' ').slice(1);
-
-  const user = getUser(userId);
-  if (!user) return bot.sendMessage(chatId, '❌ User not found. Try /start first.');
 
   if (args.length === 0) {
     let text = `⚙️ *Your Settings*\n\n`;
@@ -100,16 +96,23 @@ export async function handleHelp(bot, msg) {
 
 *Logging*
 💸 Just type naturally: \`lunch 25000\`, \`bus 1500\`
-/add — Manually add an expense
+💰 Or income: \`salary 5m\`, \`freelance 200k\`
+/add — Manually add expense or income
 
 *Reports*
 /report — Spending summary (daily/weekly/monthly/yearly)
 /predict — End-of-month forecast
+/search — Search expenses by keyword or amount
+/export — Export to CSV file
 
 *Budgets*
-/budget — View or set budgets
-/budget food 50000 — Set category budget
-/budget overall 200000 — Overall budget
+/budget — View or set budgets (per category or overall)
+/budget wizard — Interactive budget setup
+
+*Edit & Delete*
+/expenses — List recent expenses with IDs
+/edit <id> <field> <value> — Edit an expense
+/delete <id> — Delete an expense (with confirmation)
 
 *Goals*
 /goals — View goals
@@ -127,16 +130,23 @@ export async function handleHelp(bot, msg) {
 /debts borrowed Sara 30000 — Record
 /debts repay Ahmed 10000 — Repay
 
-*Subscriptions*
-/subscriptions — View
+*Subscriptions & Recurring*
+/subscriptions — View subscriptions
 /subscriptions add Netflix 1500 — Add
 /subscriptions cancel Netflix — Cancel
+/recurring — View recurring transactions
+/recurring add "Gym" 50000 monthly — Add recurring
+
+*Wishlist*
+/wishlist — View wishlist
+/wishlist add "MacBook" 2500000 — Add item
+/wishlist buy <id> — Mark as purchased
 
 *Settings*
 /settings — Preferences
 /help — This message
 
-💡 Use \`k\` for thousands: \`50k\` = 50000`;
+💡 Use \`k\`/\`m\` for shorthand: \`50k\` = 50000, \`5m\` = 5000000`;
 
   await bot.sendMessage(chatId, text, { parse_mode: 'Markdown' });
 }

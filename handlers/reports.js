@@ -11,7 +11,8 @@ import { buildSpendingReport } from '../tools/reportBuilder.js';
  */
 export async function handleReport(bot, msg) {
   const chatId = msg.chat.id;
-  const userId = msg.from.id;
+  const userId = msg.user?.id;
+  if (!userId) return bot.sendMessage(chatId, '❌ Could not identify your account.');
   const period = msg.text.split(' ').slice(1)[0]?.toLowerCase() || 'monthly';
 
   try {
@@ -27,6 +28,7 @@ export async function handleReport(bot, msg) {
       expenseCount: summary.expense_count,
       incomeCount: summary.income_count,
       byCategory: summary.byCategory,
+      byIncomeCategory: summary.byIncomeCategory,
     });
 
     await bot.sendMessage(chatId, text, { parse_mode: 'Markdown' });

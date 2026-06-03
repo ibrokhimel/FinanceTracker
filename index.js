@@ -15,12 +15,17 @@ import { initReminderScheduler } from './tools/reminderScheduler.js';
 import { handleAddExpense, handleTextMessage, handleCategoryReply, handleAmountReply, handleDateReply, handleConfirmReply } from './handlers/expenses.js';
 import { handleReport } from './handlers/reports.js';
 import { handlePredict } from './handlers/predict.js';
-import { handleBudget } from './handlers/budgets.js';
+import { handleBudget, handleBudgetCategoryReply, handleBudgetAmountReply } from './handlers/budgets.js';
 import { handleGoals } from './handlers/goals.js';
 import { handleWallets } from './handlers/wallets.js';
 import { handleDebts } from './handlers/debts.js';
 import { handleSubscriptions } from './handlers/subscriptions.js';
 import { handleStart, handleSettings, handleHelp } from './handlers/settings.js';
+import { handleListExpenses, handleEditExpense, handleDeleteExpense, handleDeleteConfirmReply } from './handlers/edit.js';
+import { handleExport } from './handlers/export.js';
+import { handleSearch } from './handlers/search.js';
+import { handleRecurring } from './handlers/recurring.js';
+import { handleWishlist } from './handlers/wishlist.js';
 
 /* ─── Initialise ───────────────────────────────────────────────────────── */
 
@@ -49,6 +54,18 @@ registerRoutes(bot, {
   expenseAmountReply:    handleAmountReply,
   expenseDateReply:      handleDateReply,
   expenseConfirmReply:   handleConfirmReply,
+  budgetCategoryReply:   handleBudgetCategoryReply,
+  budgetAmountReply:     handleBudgetAmountReply,
+  deleteConfirmReply:    handleDeleteConfirmReply,
+
+  // New commands
+  listExpenses:   handleListExpenses,
+  editExpense:    handleEditExpense,
+  deleteExpense:  handleDeleteExpense,
+  exportData:     handleExport,
+  search:         handleSearch,
+  recurring:      handleRecurring,
+  wishlist:       handleWishlist,
 
   // Callback queries placeholder
   callback: null,

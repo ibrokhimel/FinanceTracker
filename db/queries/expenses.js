@@ -94,14 +94,21 @@ export function getSpendingSummary(userId, fromDate, toDate) {
      FROM expenses WHERE user_id = ? AND date >= ? AND date <= ?`
   ).get(userId, fromDate, toDate);
 
-  const byCat = db.prepare(
+  const expByCat = db.prepare(
     `SELECT c.id, c.name, c.emoji, SUM(e.amount) AS total, COUNT(*) AS count
      FROM expenses e JOIN categories c ON e.category_id = c.id
      WHERE e.user_id = ? AND e.date >= ? AND e.date <= ? AND e.type = 'expense'
      GROUP BY c.id ORDER BY total DESC`
   ).all(userId, fromDate, toDate);
 
-  return { ...summary, byCategory: byCat };
+  const incByCat = db.prepare(
+    `SELECT c.id, c.name, c.emoji, SUM(e.amount) AS total, COUNT(*) AS count
+     FROM expenses e JOIN categories c ON e.category_id = c.id
+     WHERE e.user_id = ? AND e.date >= ? AND e.date <= ? AND e.type = 'income'
+     GROUP BY c.id ORDER BY total DESC`
+  ).all(userId, fromDate, toDate);
+
+  return { ...summary, byCategory: expByCat, byIncomeCategory: incByCat };
 }
 
 export function getTotalSpentThisMonth(userId) {
@@ -120,4 +127,44 @@ export function getMonthlyTotals(userId, months = 6) {
        SUM(CASE WHEN type='income'   THEN amount ELSE 0 END) AS income
      FROM expenses WHERE user_id = ? GROUP BY month ORDER BY month DESC LIMIT ?`
   ).all(userId, months);
+}
+
+export function searchExpenses(userId, query, opts = {}) {
+  const { limit = 20, offset = 0 } = opts;
+  const db = getDb();
+  const params = [userId];
+  let where = '';
+  let isAmountSearch = false;
+
+  // Amount range search: ">50000", "<10000", ">=5000"
+  const amountMatch = query.match(/^([><]=?|!=)\s*(\d[\d,]*)$/);
+  if (amountMatch) {
+    isAmountSearch = true;
+    const op = amountMatch[1];
+    const val = parseFloat(amountMatch[2].replace(/,/g, ''));
+    where = `AND e.amount ${op} ?`;
+    params.push(val);
+  }
+
+  if (!isAmountSearch) {
+    where = `AND (e.note LIKE ? OR c.name LIKE ? OR e.tags LIKE ? OR e.date LIKE ?)`;
+    const p = `%${query}%`;
+    params.push(p, p, p, p);
+  }
+
+  return db.prepare(
+    `SELECT e.*, c.name AS cat_name, c.emoji AS cat_emoji
+     FROM expenses e LEFT JOIN categories c ON e.category_id = c.id
+     WHERE e.user_id = ? ${where}
+     ORDER BY e.date DESC, e.id DESC LIMIT ? OFFSET ?`
+  ).all(...params, limit, offset);
+}
+
+export function getIncomeByCategory(userId, fromDate, toDate) {
+  return getDb().prepare(
+    `SELECT c.id, c.name, c.emoji, SUM(e.amount) AS total, COUNT(*) AS count
+     FROM expenses e JOIN categories c ON e.category_id = c.id
+     WHERE e.user_id = ? AND e.date >= ? AND e.date <= ? AND e.type = 'income'
+     GROUP BY c.id ORDER BY total DESC`
+  ).all(userId, fromDate, toDate);
 }

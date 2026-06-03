@@ -136,10 +136,32 @@ export function runSchema(db) {
     CREATE INDEX IF NOT EXISTS idx_expenses_category    ON expenses(category_id);
     CREATE INDEX IF NOT EXISTS idx_budgets_user_month   ON budgets(user_id, month);
     CREATE INDEX IF NOT EXISTS idx_goals_user           ON goals(user_id);
+    CREATE TABLE IF NOT EXISTS wishlist (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id         INTEGER NOT NULL,
+      name            TEXT NOT NULL,
+      price           REAL NOT NULL,
+      priority        TEXT NOT NULL DEFAULT 'medium' CHECK(priority IN ('low','medium','high')),
+      link            TEXT,
+      note            TEXT,
+      status          TEXT NOT NULL DEFAULT 'wishlisted' CHECK(status IN ('wishlisted','saving','purchased')),
+      created_at      TEXT DEFAULT (datetime('now')),
+      updated_at      TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
     CREATE INDEX IF NOT EXISTS idx_debts_user           ON debts(user_id);
+    CREATE INDEX IF NOT EXISTS idx_wishlist_user        ON wishlist(user_id);
   `);
 
+  createSystemUser(db);
   seedDefaults(db);
+}
+
+function createSystemUser(db) {
+  db.prepare(
+    'INSERT OR IGNORE INTO users (id, telegram_id, first_name, username) VALUES (0, 0, \'System\', \'system\')'
+  ).run();
 }
 
 function seedDefaults(db) {

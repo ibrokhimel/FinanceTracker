@@ -4,20 +4,31 @@
 
 import { setBudget, getBudgets } from '../db/queries/budgets.js';
 import { getCategories } from '../db/queries/categories.js';
-import { formatAmount } from '../tools/formatter.js';
-import { formatBudgetOverview } from '../tools/formatter.js';
+import { formatAmount, formatBudgetOverview } from '../tools/formatter.js';
+import { setSession, clearSession, FLOWS } from '../bot/session.js';
 
 /**
- * /budget [category] [amount]
+ * /budget [category] [amount] | wizard
  */
 export async function handleBudget(bot, msg) {
   const chatId = msg.chat.id;
-  const userId = msg.from.id;
+  const userId = msg.user?.id;
+  if (!userId) return bot.sendMessage(chatId, '❌ Could not identify your account.');
   const args = msg.text.split(' ').slice(1);
 
   try {
     if (args.length === 0) {
       return showBudgets(bot, chatId, userId);
+    }
+
+    if (args[0]?.toLowerCase() === 'wizard') {
+      const categories = getCategories(userId, 'expense');
+      const list = categories.map(c => `${c.emoji} ${c.name}`).join('\n');
+      setSession(msg.from.id, { flow: FLOWS.AWAITING_BUDGET_CATEGORY, userId });
+      return bot.sendMessage(chatId,
+        `📊 *Budget Wizard*\n\nWhich category would you like to set a budget for?\n\n${list}\n\nOr type *overall* for an overall monthly budget.`,
+        { parse_mode: 'Markdown' }
+      );
     }
 
     if (args.length >= 2) {
@@ -53,6 +64,64 @@ export async function handleBudget(bot, msg) {
   } catch (err) {
     console.error('[budgets] error:', err.message);
     await bot.sendMessage(chatId, '❌ Could not process budget command.');
+  }
+}
+
+export async function handleBudgetCategoryReply(bot, msg, session) {
+  const chatId = msg.chat.id;
+  const userId = session.userId || msg.user?.id;
+  if (!userId) return;
+
+  try {
+    const answer = msg.text.trim().toLowerCase();
+    const categories = getCategories(userId, 'expense');
+    const cat = categories.find(c => c.name.toLowerCase() === answer || c.name.toLowerCase().includes(answer));
+
+    let categoryName = 'overall';
+    if (answer !== 'overall') {
+      if (!cat) {
+        const list = categories.map(c => `${c.emoji} ${c.name}`).join('\n');
+        return bot.sendMessage(chatId,
+          `❌ Category "${answer}" not found.\n\nChoose one:\n${list}\n\nOr type *overall* for overall budget.`,
+          { parse_mode: 'Markdown' }
+        );
+      }
+      categoryName = cat.name;
+    }
+
+    setSession(msg.from.id, {
+      flow: FLOWS.AWAITING_BUDGET_AMOUNT,
+      partial: { categoryId: cat?.id || null, category: categoryName, emoji: cat?.emoji || '📊' },
+      userId,
+    });
+    await bot.sendMessage(chatId, `How much per month for *${categoryName}*?\nSend a number like \`50000\``, { parse_mode: 'Markdown' });
+  } catch (err) {
+    console.error('[budgets] category reply error:', err.message);
+    await bot.sendMessage(chatId, '❌ Something went wrong.');
+  }
+}
+
+export async function handleBudgetAmountReply(bot, msg, session) {
+  const chatId = msg.chat.id;
+  const userId = session.userId || msg.user?.id;
+  if (!userId) return;
+
+  try {
+    const amount = parseAmount(msg.text.trim());
+    if (isNaN(amount) || amount <= 0) {
+      return bot.sendMessage(chatId, '❌ Please send a valid number like `50000`', { parse_mode: 'Markdown' });
+    }
+
+    clearSession(msg.from.id);
+    const now = new Date();
+    const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    setBudget(userId, { categoryId: session.partial.categoryId, amount, period: 'monthly', month });
+
+    const label = session.partial.category === 'overall' ? 'Overall' : `${session.partial.emoji} ${session.partial.category}`;
+    await bot.sendMessage(chatId, `✅ *Budget set!*\n${label}: ${formatAmount(amount)}/month`, { parse_mode: 'Markdown' });
+  } catch (err) {
+    console.error('[budgets] amount reply error:', err.message);
+    await bot.sendMessage(chatId, '❌ Something went wrong.');
   }
 }
 

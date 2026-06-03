@@ -10,7 +10,8 @@ import { formatAmount } from '../tools/formatter.js';
  */
 export async function handleDebts(bot, msg) {
   const chatId = msg.chat.id;
-  const userId = msg.from.id;
+  const userId = msg.user?.id;
+  if (!userId) return bot.sendMessage(chatId, '❌ Could not identify your account.');
   const args = msg.text.split(' ').slice(1);
 
   try {

@@ -8,24 +8,33 @@ import { formatAmount, progressBar } from './formatter.js';
 /**
  * Build a spending report string.
  */
-export function buildSpendingReport({ label, fromDate, toDate, totalExpenses, totalIncome, expenseCount, incomeCount, byCategory }) {
+export function buildSpendingReport({ label, fromDate, toDate, totalExpenses, totalIncome, expenseCount, incomeCount, byCategory, byIncomeCategory }) {
   let text = `📊 *${label}*\n${fromDate} → ${toDate}\n\n`;
 
   text += `💸 *Expenses:* ${formatAmount(totalExpenses)}\n`;
   text += `📥 *Income:* ${formatAmount(totalIncome)}\n`;
   text += `📋 *Transactions:* ${expenseCount} expenses, ${incomeCount} income\n`;
 
-  if (totalIncome > 0) {
+  if (totalIncome > 0 || totalExpenses > 0) {
     const balance = totalIncome - totalExpenses;
     const emoji = balance >= 0 ? '✅' : '🔴';
     text += `\n${emoji} *Balance:* ${formatAmount(Math.abs(balance))} ${balance >= 0 ? 'surplus' : 'deficit'}\n`;
   }
 
   if (byCategory && byCategory.length > 0) {
-    text += `\n━━━ *By Category* ━━━\n\n`;
+    text += `\n━━━ *Expenses by Category* ━━━\n\n`;
     for (const c of byCategory) {
       const pct = totalExpenses > 0 ? (c.total / totalExpenses * 100) : 0;
       text += `${c.emoji || '📌'} *${c.name}* — ${formatAmount(c.total)} (${pct.toFixed(1)}%)\n`;
+      text += `${progressBar(pct)} ${c.count} txns\n\n`;
+    }
+  }
+
+  if (byIncomeCategory && byIncomeCategory.length > 0) {
+    text += `━━━ *Income by Category* ━━━\n\n`;
+    for (const c of byIncomeCategory) {
+      const pct = totalIncome > 0 ? (c.total / totalIncome * 100) : 0;
+      text += `${c.emoji || '📥'} *${c.name}* — ${formatAmount(c.total)} (${pct.toFixed(1)}%)\n`;
       text += `${progressBar(pct)} ${c.count} txns\n\n`;
     }
   }
@@ -70,22 +79,25 @@ export function buildComparison(period, current, previous) {
 export function buildWelcome(firstName) {
   return `👋 *Welcome, ${firstName}!* 🎉
 
-I track your money via natural language. Just type:
+I track your finances via natural language. Just type:
 
-💸 \`lunch 25000\`
+💸 \`lunch 25000\` (expense)
+💰 \`salary 500000\` (income)
 🚗 \`bus 1500\`
-💰 \`salary 500000\`
 
-*Commands*
-/report  — spending summary
-/budget  — set & view budgets
-/goals   — savings goals
-/wallets — wallet balances
-/debts   — debt tracker
-/subscriptions — subscriptions
+*Key Commands*
+/report  — spending & income summary
+/budget  — set budgets per category
+/expenses — list recent expenses with IDs
+/edit, /delete — edit or remove entries
+/search — find expenses
+/export — CSV export
+/goals, /wishlist — savings & wishlist
+/wallets, /debts, /subscriptions
+/recurring — auto-recurring transactions
 /predict — end-of-month forecast
 /settings — preferences
-/help    — all commands
+/help    — full command list
 
 Let's get started! 🚀`;
 }
