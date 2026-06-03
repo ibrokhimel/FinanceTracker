@@ -16,6 +16,12 @@ import { getCategories, findCategoryByName } from '../db/queries/categories.js';
 import { getBudgets } from '../db/queries/budgets.js';
 import { getUser } from '../db/queries/users.js';
 import { setSession, clearSession, FLOWS } from '../bot/session.js';
+import { expenseActions } from '../bot/keyboards.js';
+import { detectCurrency, convert } from '../tools/currency.js';
+import { config } from '../tools/config.js';
+import { shouldWarn } from '../tools/regret.js';
+import { shouldDelay, markPending } from '../tools/friction.js';
+import { inline } from '../bot/keyboards.js';
 
 /**
  * /add command — manually add with structured input or start the flow.
@@ -68,6 +74,18 @@ export async function handleTextMessage(bot, msg) {
     const text = msg.text.trim();
     const parsed = parseQuick(text);
     if (parsed.needsClarification || !parsed.amount || parsed.amount <= 0) return;
+
+    // Confidence gate — below threshold, confirm with user first
+    const THRESHOLD = 60;
+    if (parsed.confidence < THRESHOLD) {
+      const partial = { ...parsed, type: parsed.type };
+      setSession(msg.from.id, { flow: FLOWS.AWAITING_EXPENSE_CONFIRMATION, partial, userId });
+      const note = parsed.note || parsed.category || 'this';
+      return bot.sendMessage(chatId,
+        `Got *${formatAmount(parsed.amount)}* for *${parsed.category || 'Uncategorized'}* (${parsed.emoji || '📌'}) — ${note}?\nConfidence ${parsed.confidence}%. Reply *yes* to confirm, or *category/amount/date <value>* to change.`,
+        { parse_mode: 'Markdown' }
+      );
+    }
 
     await saveAndConfirm(bot, chatId, userId, parsed);
   } catch (err) {
@@ -221,21 +239,68 @@ async function saveAndConfirm(bot, chatId, userId, parsed) {
   const categories = getCategories(userId, parsed.type);
   const cat = categories.find(c => c.name.toLowerCase() === parsed.category?.toLowerCase());
 
+  // Currency detection & conversion
+  const base = (await import('../db/queries/users.js')).getUser(userId)?.currency || config.currency.base || 'UZS';
+  const detected = parsed.currency || detectCurrency(parsed.rawText || parsed.note || '') || null;
+  let storedAmount = parsed.amount;
+  let originalCurrency = null;
+  let originalAmount = null;
+  if (detected && detected !== base) {
+    const converted = await convert(parsed.amount, detected, base);
+    if (converted != null) {
+      originalAmount = parsed.amount;
+      originalCurrency = detected;
+      storedAmount = Math.round(converted);
+    }
+  }
+
+  // Regret pre-save warning (best-effort, non-blocking)
+  const warn = shouldWarn(userId, cat?.id);
+
   const expense = addExpense({
     user_id: userId,
-    amount: parsed.amount,
+    amount: storedAmount,
     category_id: cat?.id || null,
     note: parsed.note || `${parsed.category || 'Expense'}`,
     date: parsed.date || new Date().toISOString().slice(0, 10),
     type: parsed.type || 'expense',
   });
 
+  // Save original currency fields
+  if (originalCurrency) {
+    try {
+      const { getDb } = await import('../db/database.js');
+      getDb().prepare(
+        "UPDATE expenses SET original_amount = ?, original_currency = ? WHERE id = ?"
+      ).run(originalAmount, originalCurrency, expense.id);
+    } catch {}
+  }
+
+  // Friction mode — hold pending if applicable
+  let pendingUntil = null;
+  if (parsed.type === 'expense' && shouldDelay(userId, cat?.id)) {
+    pendingUntil = markPending(expense.id, 10);
+  }
+
+  // Persist confidence + source for future ML / regret analysis
+  if (typeof parsed.confidence === 'number' || parsed.source) {
+    try {
+      const { getDb } = await import('../db/database.js');
+      getDb().prepare(
+        "UPDATE expenses SET confidence = ?, source = COALESCE(?, source) WHERE id = ?"
+      ).run(parsed.confidence ?? null, parsed.source || null, expense.id);
+    } catch {}
+  }
+
   const catEmoji = cat?.emoji || parsed.emoji || '📌';
   const icon = parsed.type === 'income' ? '📥' : '💸';
 
-  let reply = `${icon} *${parsed.type === 'income' ? 'Income' : 'Expense'} logged!*\n${catEmoji} *${cat?.name || parsed.category || 'Uncategorized'}*: ${formatAmount(parsed.amount)}`;
+  let reply = `${icon} *${parsed.type === 'income' ? 'Income' : 'Expense'} logged!*\n${catEmoji} *${cat?.name || parsed.category || 'Uncategorized'}*: ${formatAmount(storedAmount, base)}`;
+  if (originalCurrency) reply += `\n💱 _(originally ${formatAmount(originalAmount, originalCurrency)})_`;
   if (parsed.note && parsed.note !== (parsed.category || '').toLowerCase()) reply += `\n📝 ${parsed.note}`;
   reply += `\n📅 ${expense.date}`;
+  if (warn)         reply = `🟡 _${warn}_\n\n` + reply;
+  if (pendingUntil) reply += `\n\n🪨 *Friction mode:* this entry is pending until ${pendingUntil.slice(11,16)} UTC. Tap *Cancel* to drop it.`;
 
   // Budget alerts
   if (parsed.type === 'expense') {
@@ -254,5 +319,24 @@ async function saveAndConfirm(bot, chatId, userId, parsed) {
     if (alertText) reply += `\n\n⚠️ *Budget Alert*\n${alertText}`;
   }
 
-  await bot.sendMessage(chatId, reply, { parse_mode: 'Markdown' });
+  const kb = pendingUntil
+    ? inline([[
+        { text: '🚫 Cancel (friction)', callback_data: `exp:cancel:${expense.id}` },
+        { text: '✏️ Edit',  callback_data: `exp:edit:${expense.id}` },
+      ]])
+    : expenseActions(expense.id);
+  await bot.sendMessage(chatId, reply, { parse_mode: 'Markdown', ...kb });
+
+  // Achievement check (silent — emits a badge if newly earned)
+  try {
+    const { evaluate } = await import('../tools/achievements.js');
+    const { badge } = await import('../tools/charts.js');
+    const earned = evaluate(userId);
+    for (const a of earned) {
+      const buf = badge({ title: a.title, subtitle: a.subtitle, emoji: a.emoji });
+      await bot.sendPhoto(chatId, buf, { caption: `🏆 *Achievement unlocked!* ${a.title}`, parse_mode: 'Markdown' });
+    }
+  } catch (err) {
+    console.warn('[expenses] achievement eval:', err.message);
+  }
 }

@@ -1,12 +1,10 @@
 import TelegramBot from 'node-telegram-bot-api';
-import dotenv from 'dotenv';
+import { config } from '../tools/config.js';
 
-dotenv.config();
-
-const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const TOKEN = config.telegram.botToken;
 
 if (!TOKEN) {
-  console.error('❌ TELEGRAM_BOT_TOKEN is not set. Copy .env.example to .env and add your token.');
+  console.error('❌ TELEGRAM_BOT_TOKEN not set. Add it to credentials.json or .env');
   process.exit(1);
 }
 
@@ -30,6 +28,15 @@ export function initBot() {
 
   botInstance.on('error', (err) => {
     console.error('[bot] error:', err.message);
+  });
+
+  // Don't let an unhandled rejection (e.g. Telegram API 400) crash the whole bot.
+  process.on('unhandledRejection', (reason) => {
+    const msg = reason?.message || String(reason);
+    console.error('[bot] unhandled rejection:', msg.slice(0, 300));
+  });
+  process.on('uncaughtException', (err) => {
+    console.error('[bot] uncaught exception:', err?.message || err);
   });
 
   console.log('[bot] Telegram bot initialised');

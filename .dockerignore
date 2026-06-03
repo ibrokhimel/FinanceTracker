@@ -1,0 +1,11 @@
+node_modules
+.git
+*.db
+*.db.bak
+.env
+tests
+*.log
+.vscode
+.idea
+data
+finance.db*

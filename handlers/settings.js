@@ -4,6 +4,8 @@
 
 import { updateUser } from '../db/queries/users.js';
 import { buildWelcome } from '../tools/reportBuilder.js';
+import { consumeInvite, setAccess, isApproved } from '../db/queries/access.js';
+import { getDb } from '../db/database.js';
 
 /**
  * /start — welcome message and onboarding.
@@ -11,8 +13,34 @@ import { buildWelcome } from '../tools/reportBuilder.js';
 export async function handleStart(bot, msg) {
   const chatId = msg.chat.id;
   const firstName = msg.from.first_name || 'User';
+  const userId = msg.user?.id;
 
-  await bot.sendMessage(chatId, buildWelcome(firstName), { parse_mode: 'Markdown' });
+  // Telegram passes /start <payload>  → deep link
+  const m = msg.text.match(/^\/start\s+(\S+)/);
+  const payload = m?.[1];
+
+  if (payload?.startsWith('invite_') && userId) {
+    const code = payload.slice(7);
+    const inv = consumeInvite(code);
+    if (inv) {
+      setAccess(userId, 'approved', inv.created_by);
+      getDb().prepare('UPDATE users SET invited_by = ?, invite_code = ? WHERE id = ?').run(inv.created_by, code, userId);
+      await bot.sendMessage(chatId, `✅ Invite accepted — welcome to FinanceBot, ${firstName}!`);
+    } else {
+      await bot.sendMessage(chatId, `⚠️ That invite link is invalid, revoked, or expired. You're in pending state — an admin needs to approve you.`);
+    }
+  }
+
+  // Send welcome only if approved
+  if (userId && isApproved(userId)) {
+    await bot.sendMessage(chatId, buildWelcome(firstName), { parse_mode: 'Markdown' });
+  } else if (userId) {
+    await bot.sendMessage(chatId,
+      `👋 Hi ${firstName}!\n\nFinanceBot is invite-only. You're now in the *pending* queue.\n\n` +
+      `🎟️ If you have an invite link, click it — that auto-approves you.\n` +
+      `📨 Otherwise, ask an admin to run \`/admin allow ${msg.from.id}\`.\n\nYour Telegram ID: \`${msg.from.id}\``,
+      { parse_mode: 'Markdown' });
+  }
 }
 
 /**
@@ -81,72 +109,115 @@ export async function handleSettings(bot, msg) {
       await bot.sendMessage(chatId, `📅 Month starts day ${d}.`);
       break;
     }
+    case 'theme': {
+      const allowed = ['default', 'minimal', 'colorful', 'dark'];
+      const v = value.toLowerCase();
+      if (!allowed.includes(v)) return bot.sendMessage(chatId, `Options: ${allowed.join(', ')}`);
+      updateUser(user.id, { theme: v });
+      await bot.sendMessage(chatId, `🎨 Theme → ${v}`);
+      break;
+    }
+    case 'ai': {
+      const on = ['on','1','true','yes'].includes(value.toLowerCase());
+      updateUser(user.id, { ai_enabled: on ? 1 : 0 });
+      await bot.sendMessage(chatId, `🤖 AI parser ${on ? 'enabled' : 'disabled'}.`);
+      break;
+    }
+    case 'debrief': {
+      const on = ['on','1','true','yes'].includes(value.toLowerCase());
+      updateUser(user.id, { debrief_enabled: on ? 1 : 0 });
+      await bot.sendMessage(chatId, `🌙 Daily debrief ${on ? 'enabled' : 'disabled'}.`);
+      break;
+    }
+    case 'friction': {
+      // /settings friction food,transport  or  /settings friction off
+      if (['off','none','0'].includes(value.toLowerCase())) {
+        updateUser(user.id, { friction_categories: null });
+        await bot.sendMessage(chatId, '🪨 Friction mode disabled.');
+      } else {
+        updateUser(user.id, { friction_categories: value });
+        await bot.sendMessage(chatId, `🪨 Friction mode on for: ${value}`);
+      }
+      break;
+    }
     default:
       await bot.sendMessage(chatId, `❌ Unknown setting "${key}". Use /settings to see options.`);
   }
 }
 
 /**
- * /help — full command list.
+ * /help — full command list, grouped by category.
  */
 export async function handleHelp(bot, msg) {
   const chatId = msg.chat.id;
 
-  const text = `📚 *FinanceBot Commands*
+  const text = `📚 *FinanceBot — All Commands*
 
-*Logging*
-💸 Just type naturally: \`lunch 25000\`, \`bus 1500\`
-💰 Or income: \`salary 5m\`, \`freelance 200k\`
+💬 _Just type naturally:_  \`lunch 25000\`, \`bus 1500\`, \`salary 5m\`
+🎙️ _Send a voice memo_ — auto-transcribed via Groq Whisper
+📸 _Send a receipt photo_ — auto-OCR'd via Gemini
+
+━━━ *Logging* ━━━
 /add — Manually add expense or income
+/expenses — List recent (paginated with buttons)
+/edit \`<id> <field> <value>\`
+/delete \`<id>\`
+/undo — Restore last deleted entry
+/history \`<id>\` — Audit trail
+/search \`<query>\` — Text or amount filter
 
-*Reports*
-/report — Spending summary (daily/weekly/monthly/yearly)
+━━━ *Reports & Visuals* ━━━
+/report — Daily/weekly/monthly/yearly summary
 /predict — End-of-month forecast
-/search — Search expenses by keyword or amount
-/export — Export to CSV file
+/chart — 18 visual chart types (menu)
+/pdf — Polished monthly PDF
+/pdf json — Raw JSON dump
+/export — CSV export
+/score — 💯 Financial Health Score (image)
+/networth — 📈 Net worth + 12-month curve
+/debrief — 🌙 AI end-of-day summary
+/personality — 🧠 AI spending profile
+/payday — 💰 Post-payday spike analysis
 
-*Budgets*
-/budget — View or set budgets (per category or overall)
-/budget wizard — Interactive budget setup
+━━━ *Money Tracking* ━━━
+/budget — View/set budgets (or \`/budget wizard\`)
+/goals — Savings goals
+/wallets — Balances + transfers
+/debts — Lent / borrowed tracker
+/split \`<desc> <amount> <p1> <p2>\` — Split a bill
+/subscriptions — Renewal manager
+/recurring — Auto-logged transactions
+/investments — 📈 Portfolio (stocks + crypto)
 
-*Edit & Delete*
-/expenses — List recent expenses with IDs
-/edit <id> <field> <value> — Edit an expense
-/delete <id> — Delete an expense (with confirmation)
+━━━ *Behavioral* ━━━
+/whatif \`<cat> <delta>\` — Compound savings simulator
+/streaks — Streaks with stakes
+/events — Life event budget predictor
+/wishlist — Savings wishlist
+/buddy — 🤝 Accountability buddy (privacy-preserving)
 
-*Goals*
-/goals — View goals
-/goals new "Trip" 100000 — Create goal
-/goals add 5000 — Add to goal
+━━━ *Talk to the AI* ━━━
+/ask \`<question>\` — Chat with the AI about your money
+/usage — Your rate-limit + token usage
 
-*Wallets*
-/wallets — View balances
-/wallets new "Bank" bank — Create
-/wallets transfer Cash Bank 50000 — Transfer
+━━━ *Account & Invites* ━━━
+/whoami — Your Telegram ID, role, status
+/invite — Generate sharable invite links
+/admin — Admin panel (admin only)
 
-*Debts*
-/debts — View debts
-/debts lent Ahmed 50000 — Record
-/debts borrowed Sara 30000 — Record
-/debts repay Ahmed 10000 — Repay
+━━━ *Settings* ━━━
+/settings — All preferences
+/settings theme \`<default|minimal|colorful|dark>\`
+/settings ai \`on/off\` — toggle LLM parser
+/settings debrief \`on/off\` — toggle daily AI summary
+/settings friction \`food,transport\` — add friction-mode categories
+/settings currency \`USD/EUR/UZS/...\`
+/settings nudge \`21:00\` (or \`off\`)
+/settings monthday \`<1-28>\`
 
-*Subscriptions & Recurring*
-/subscriptions — View subscriptions
-/subscriptions add Netflix 1500 — Add
-/subscriptions cancel Netflix — Cancel
-/recurring — View recurring transactions
-/recurring add "Gym" 50000 monthly — Add recurring
-
-*Wishlist*
-/wishlist — View wishlist
-/wishlist add "MacBook" 2500000 — Add item
-/wishlist buy <id> — Mark as purchased
-
-*Settings*
-/settings — Preferences
-/help — This message
-
-💡 Use \`k\`/\`m\` for shorthand: \`50k\` = 50000, \`5m\` = 5000000`;
+💡 Shorthand: \`k\` = 1,000 · \`m\` = 1,000,000 · \`b\` = 1,000,000,000
+💱 Currency in text: \`lunch 25 usd\` → auto-converted to your base currency
+🪨 *Friction mode:* over-budget categories get a 10-minute hold-cancel window`;
 
   await bot.sendMessage(chatId, text, { parse_mode: 'Markdown' });
 }

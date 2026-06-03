@@ -8,6 +8,7 @@ import { parseQuick } from '../tools/parser.js';
 import { resolveDate } from '../tools/dateHelper.js';
 import { formatAmount } from '../tools/formatter.js';
 import { setSession, clearSession, FLOWS } from '../bot/session.js';
+import { logAudit } from '../db/queries/audit.js';
 
 /**
  * /expenses [limit] — list recent expenses with IDs.
@@ -36,7 +37,10 @@ export async function handleListExpenses(bot, msg) {
     }
     text += `Use \`/edit <id> <field> <value>\` or \`/delete <id>\``;
 
-    await bot.sendMessage(chatId, text, { parse_mode: 'Markdown' });
+    const { pagination } = await import('../bot/keyboards.js');
+    const hasNext = expenses.length === Math.min(limit, 50);
+    const kb = pagination('exp:p', 0, hasNext, false);
+    await bot.sendMessage(chatId, text, { parse_mode: 'Markdown', ...kb });
   } catch (err) {
     console.error('[edit] list error:', err.message);
     await bot.sendMessage(chatId, '❌ Could not load expenses.');
@@ -72,11 +76,14 @@ export async function handleEditExpense(bot, msg) {
     const field = parts[1].toLowerCase();
     const value = parts.slice(2).join(' ');
 
+    const before = { ...expense };
+
     switch (field) {
       case 'amount': {
         const parsed = parseQuick(value);
         if (!parsed.amount || parsed.amount <= 0) return bot.sendMessage(chatId, '❌ Invalid amount.');
         updateExpense(id, { amount: parsed.amount });
+        logAudit({ userId, action: 'edit-amount', table: 'expenses', targetId: id, before, after: { ...before, amount: parsed.amount } });
         await bot.sendMessage(chatId, `✅ Updated amount → ${formatAmount(parsed.amount)}`);
         break;
       }
@@ -153,9 +160,11 @@ export async function handleDeleteConfirmReply(bot, msg, session) {
   try {
     const text = msg.text.trim().toLowerCase();
     if (text === 'yes' || text === 'y') {
+      const before = getExpenseById(session.deleteId);
+      if (before) logAudit({ userId, action: 'delete', table: 'expenses', targetId: session.deleteId, before });
       deleteExpense(session.deleteId);
       clearSession(msg.from.id);
-      await bot.sendMessage(chatId, `🗑️ *Deleted!* Expense #${session.deleteId} removed permanently.`);
+      await bot.sendMessage(chatId, `🗑️ *Deleted!* Expense #${session.deleteId} removed. Use /undo to restore.`);
     } else {
       clearSession(msg.from.id);
       await bot.sendMessage(chatId, '👍 Delete cancelled.');

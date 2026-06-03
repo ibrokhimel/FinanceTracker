@@ -1,6 +1,25 @@
 node_modules/
 .env
 .enc
-*.db
-data/
+credentials.json
 .DS_Store
+
+# SQLite + backups
+*.db
+*.db-shm
+*.db-wal
+*.db.bak
+data/
+
+# Test artifacts
+test-*.db*
+coverage/
+.nyc_output/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+
+# Logs
+*.log

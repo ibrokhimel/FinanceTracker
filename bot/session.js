@@ -1,11 +1,55 @@
 /**
  * Per-user conversation session manager.
- * Holds state when the bot is waiting for a follow-up reply.
- * Data is held in memory (not persisted) — simple and fast.
+ * In-memory Map with periodic DB persistence so state survives restarts.
  */
 
 /** @type {Map<number, object>} */
 const sessions = new Map();
+let _dirty = false;
+
+function persistOne(telegramId, data) {
+  try {
+    import('../db/database.js').then(({ getDb }) => {
+      getDb().prepare(`
+        INSERT OR REPLACE INTO sessions (telegram_id, data, updated_at)
+        VALUES (?, ?, datetime('now'))
+      `).run(telegramId, JSON.stringify(data));
+    }).catch(() => {});
+  } catch {}
+}
+
+function deleteOne(telegramId) {
+  try {
+    import('../db/database.js').then(({ getDb }) => {
+      getDb().prepare('DELETE FROM sessions WHERE telegram_id = ?').run(telegramId);
+    }).catch(() => {});
+  } catch {}
+}
+
+/**
+ * Restore in-flight sessions from DB at startup.
+ * Sessions older than 1 hour are skipped.
+ */
+export function restoreSessions() {
+  try {
+    import('../db/database.js').then(({ getDb }) => {
+      const rows = getDb().prepare(`
+        SELECT telegram_id, data FROM sessions
+        WHERE updated_at > datetime('now', '-1 hour')
+      `).all();
+      let n = 0;
+      for (const r of rows) {
+        try {
+          sessions.set(r.telegram_id, JSON.parse(r.data));
+          n++;
+        } catch {}
+      }
+      if (n) console.log(`[session] restored ${n} active session(s)`);
+      // Clean up old rows
+      getDb().prepare("DELETE FROM sessions WHERE updated_at <= datetime('now', '-1 hour')").run();
+    }).catch(() => {});
+  } catch {}
+}
 
 /**
  * Set session data for a Telegram user.
@@ -14,6 +58,7 @@ const sessions = new Map();
  */
 export function setSession(telegramId, data) {
   sessions.set(telegramId, data);
+  persistOne(telegramId, data);
 }
 
 /**
@@ -41,6 +86,7 @@ export function updateSession(telegramId, partial) {
  */
 export function clearSession(telegramId) {
   sessions.delete(telegramId);
+  deleteOne(telegramId);
 }
 
 /**

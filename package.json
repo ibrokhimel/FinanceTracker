@@ -5,7 +5,9 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "keywords": [
     "telegram",
@@ -16,9 +18,16 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "better-sqlite3": "^12.10.0",
+    "canvas": "^3.2.3",
+    "chart.js": "^4.5.1",
+    "chartjs-node-canvas": "^5.0.0",
     "dotenv": "^17.4.2",
+    "groq-sdk": "^1.2.1",
     "node-cron": "^4.2.1",
-    "node-telegram-bot-api": "^0.67.0"
+    "node-telegram-bot-api": "^0.67.0",
+    "pdfkit": "^0.18.0",
+    "vitest": "^4.1.8"
   }
 }
