@@ -1,5 +1,9 @@
 # FinanceBot — Telegram Personal Finance Tracker
 
+[![GitHub](https://img.shields.io/badge/GitHub-ibrokhimel%2FFinanceTracker-181717?logo=github)](https://github.com/ibrokhimel/FinanceTracker)
+[![Node](https://img.shields.io/badge/node-%3E%3D18-339933?logo=node.js)](https://nodejs.org/)
+[![License](https://img.shields.io/badge/license-ISC-blue)]()
+
 A Telegram bot for tracking expenses, managing budgets, setting savings goals, and more — all through natural language.
 
 **Zero AI. Zero API costs. Everything runs locally with regex parsing.**
@@ -31,6 +35,7 @@ A Telegram bot for tracking expenses, managing budgets, setting savings goals, a
 
 2. **Install dependencies**
    ```bash
+   cd FinanceTracker
    npm install
    ```
 
@@ -49,6 +54,8 @@ A Telegram bot for tracking expenses, managing budgets, setting savings goals, a
    ```
 
 The bot will create a SQLite database (`finance.db`) automatically on first run.
+
+> 💡 If you're upgrading from an older version, delete `finance.db` first — the schema has changed and the bot will recreate it fresh.
 
 ## Commands
 
