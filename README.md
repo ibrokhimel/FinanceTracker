@@ -4,74 +4,88 @@
 [![Node](https://img.shields.io/badge/node-%3E%3D18-339933?logo=node.js)](https://nodejs.org/)
 [![License](https://img.shields.io/badge/license-ISC-blue)]()
 
-A Telegram bot for tracking expenses, managing budgets, setting savings goals, and more — all through natural language.
+A Telegram bot for tracking expenses, managing budgets, setting savings goals, and more — mostly by tapping buttons or typing naturally.
 
-**Zero AI. Zero API costs. Everything runs locally with regex parsing.**
+**Local-first:** your data lives in a local SQLite file. Logging works fully offline with a regex parser; **AI features are optional** — add a free API key to unlock chat, receipt photos, voice notes, and AI summaries.
 
 ## Features
 
-- 💸 **Natural Language Logging** — Type `lunch 25000` or `bus 1500` or `salary 500000`
-- 🧠 **Regex Auto-Categorization** — 100+ keyword patterns map to 19 categories automatically
-- 📊 **Spending Reports** — Daily, weekly, monthly, yearly summaries with emoji progress bars
-- 🔮 **Predictions** — End-of-month spending forecast based on your daily average
-- 💰 **Budget Management** — Per-category & overall budgets with 50%/80%/100% threshold alerts
-- 🎯 **Savings Goals** — Create goals with progress tracking and milestone celebrations
-- 💳 **Multi-Wallet** — Cash, bank, savings accounts with transfer support
-- 📋 **Debt Tracker** — Money lent/borrowed with repayment tracking
-- 🔄 **Subscription Manager** — Track recurring bills with renewal reminders
-- ⏰ **Daily Nudge** — Optional reminders to log expenses at your chosen time
-- 📬 **Weekly Digest** — Auto-summary every Monday morning
-- 🔁 **Recurring Transactions** — Auto-log rent, salary, subscriptions
-- 💬 **Multi-step Clarification** — When the parser is unsure, it asks follow-up questions
+- 💸 **Natural-language logging** — Type `lunch 25000`, `bus 1500`, or `salary 500000`
+- 💬 **AI chat by default** — Just type a question (`how much did I spend on food?`) and the AI answers from *your* data — no `/ask` needed (toggle in `/settings`; needs an AI key)
+- 🔘 **Buttons everywhere** — Tap to create wallets, transfer, add to goals, repay debts, pause subscriptions, pick currency/theme — minimal typing
+- 🧾 **Receipt photos & voice notes** — Send a receipt to OCR it, or a voice memo to transcribe + log (needs an AI key)
+- 🎨 **Beautiful charts & cards** — Health score, net-worth curve, spending heatmap, budget scorecard, wallet cards, year-wrapped poster and more, rendered as polished images
+- 🧠 **Auto-categorization** — 100+ keyword patterns map to 19 categories
+- 📊 **Reports & forecasts** — Daily/weekly/monthly/yearly summaries + end-of-month prediction
+- 💯 **Financial health score** — 0–100 with budget / savings / debt / streak / goal sub-scores
+- 💰 **Budgets** — Per-category & overall, with 50/80/100% alerts (spend computed live)
+- 🎯 **Savings goals · 💳 multi-wallet · 📋 debts · 🔄 subscriptions · 🔁 recurring · 📈 investments**
+- ⏰ **Smart reminders** — Daily nudge, weekly digest, bill reminders, AI debrief
+- 🔐 **Invite-only access** — Invite links, admin panel, per-user preferences, audit log + `/undo`
 
 ## Prerequisites
 
-- [Node.js](https://nodejs.org/) 18+ installed
+- [Node.js](https://nodejs.org/) 18+ (20+ recommended)
 - A [Telegram Bot Token](https://t.me/BotFather) from @BotFather
+- *(optional)* a free AI key (e.g. [Groq](https://console.groq.com/)) for the AI features
 
 ## Quick Start
 
-1. **Clone or copy the project files**
+> 🍎 **On a Mac?** Follow the beginner-friendly **[START_MAC.md](START_MAC.md)** instead.
 
-2. **Install dependencies**
+1. **Install dependencies**
    ```bash
    cd FinanceTracker
    npm install
    ```
+   > On macOS, if `canvas`/`better-sqlite3` fail to build, run
+   > `xcode-select --install` and
+   > `brew install pkg-config cairo pango libpng jpeg giflib librsvg`, then retry.
 
-3. **Set up environment variables**
+2. **Set up environment variables**
    ```bash
    cp .env.example .env
    ```
-   Edit `.env` and add your bot token:
+   Edit `.env` and add your bot token (and optionally an AI key):
    ```
    TELEGRAM_BOT_TOKEN=your_bot_token_from_botfather
+   # GROQ_API_KEY=your_groq_key        # optional — enables AI chat / voice / summaries
+   # GEMINI_API_KEY=your_gemini_key    # optional — best for receipt photo OCR
    ```
 
-4. **Run the bot**
+3. **Run the bot**
    ```bash
    npm start
    ```
 
-The bot will create a SQLite database (`finance.db`) automatically on first run.
+The bot creates a SQLite database (`finance.db`) and runs all migrations automatically on
+first run. A `.bak` backup is made before each migration, so upgrades are safe — no need to
+delete the database.
 
-> 💡 If you're upgrading from an older version, delete `finance.db` first — the schema has changed and the bot will recreate it fresh.
+## Running the tests
+
+```bash
+npm test
+```
 
 ## Commands
 
+Most commands open an inline-button menu — you rarely need to type arguments.
+
 | Command | Description |
 |---|---|
-| `/start` | Welcome message and onboarding |
-| `/help` | Full command reference |
-| `/add` | Manually add an expense |
-| `/report` | Spending summary (daily/weekly/monthly/yearly) |
-| `/predict` | End-of-month spending forecast |
-| `/budget` | View or set monthly budgets |
-| `/goals` | Manage savings goals (create, add progress) |
-| `/wallets` | View wallet balances (create, transfer) |
-| `/debts` | Track debts and loans (lent, borrowed, repay) |
-| `/subscriptions` | Manage subscriptions (add, cancel, pause) |
-| `/settings` | Change preferences (currency, nudge, digest) |
+| `/start` · `/help` | Onboarding · full command reference |
+| `/add` · `/expenses` · `/edit` · `/delete` · `/undo` | Log / list / edit / delete / restore entries |
+| `/report` · `/predict` · `/chart` · `/pdf` · `/export` | Summaries, forecast, charts, PDF, CSV |
+| `/score` · `/networth` · `/debrief` · `/personality` | Health score, net worth, AI summaries |
+| `/budget` · `/goals` · `/wallets` · `/debts` | Budgets, savings goals, wallets+transfers, debts |
+| `/subscriptions` · `/recurring` · `/investments` · `/wishlist` | Recurring money + portfolio + wishlist |
+| `/ask` | Ask the AI (or just type a question — no command needed) |
+| `/settings` | Tappable preferences (currency, theme, nudge, AI chat, digest) |
+| `/invite` · `/whoami` · `/usage` · `/admin` | Invites, your status, usage, admin panel |
+
+Just typing also works: a message that isn't an expense (e.g. *"what's my biggest spend?"*)
+is answered by the AI when an AI key is configured.
 
 ## Natural Language Examples
 
@@ -109,12 +123,10 @@ Bot: Does this look right?
     🍽️ Food & Dining: 500 UZS
     📝 snacks
     📅 2026-06-03
-    Reply yes to confirm
-You: yes
-Bot: 💸 Expense logged! 🍽️ Food & Dining: 500 UZS
+    [ ✅ Save ]  [ ❌ Cancel ]
 ```
 
-You can also edit individual fields during confirmation:
+Tap **✅ Save** to confirm. You can still edit individual fields by typing:
 - `category Transport`
 - `amount 1000`
 - `date yesterday`
@@ -135,46 +147,38 @@ The bot automatically checks your budgets when you log expenses:
 │
 ├── bot/
 │   ├── bot.js                ← TelegramBot instance initialisation
-│   ├── router.js             ← Routes messages/commands to handlers
-│   └── session.js            ← Per-user multi-step conversation state
+│   ├── router.js             ← Routes messages/commands/sessions to handlers
+│   ├── keyboards.js          ← Inline-button builders (menus, pickers, actions)
+│   ├── session.js            ← Per-user multi-step conversation state
+│   └── commands.js           ← Telegram "/" command menu registry
 │
-├── handlers/
-│   ├── expenses.js           ← /add + plain-text + multi-step reply handlers
-│   ├── reports.js            ← /report command
-│   ├── budgets.js            ← /budget command
-│   ├── goals.js              ← /goals command
-│   ├── wallets.js            ← /wallets command
-│   ├── debts.js              ← /debts command
-│   ├── subscriptions.js      ← /subscriptions command
-│   ├── predict.js            ← /predict command
-│   └── settings.js           ← /start, /settings, /help
+├── handlers/                 ← One file per command (~35): expenses, reports,
+│   ├── expenses.js           ←   budgets, goals, wallets, debts, subscriptions,
+│   ├── callbacks.js          ←   recurring, investments, charts, score, networth,
+│   ├── flows.js              ←   ask, photo, voice, invite, admin, settings …
+│   ├── ask.js                ← callbacks.js = inline-button dispatcher
+│   └── settings.js           ← flows.js   = button-initiated multi-step inputs
 │
 ├── tools/
 │   ├── parser.js             ← Regex NLP: "lunch 25000" → { amount, category, date }
-│   ├── categorizer.js        ← 100+ keyword → category map (pure function)
-│   ├── dateHelper.js         ← "yesterday", "last friday" → ISO date (pure function)
-│   ├── formatter.js          ← Currency, date, progress bar formatting
-│   ├── budgetChecker.js      ← Budget threshold alert engine (pure function)
-│   ├── predictor.js          ← End-of-month spending forecast (pure function)
-│   ├── reportBuilder.js      ← Builds formatted report strings
-│   └── reminderScheduler.js  ← Cron job setup (nudges, digest, bills)
+│   ├── ai.js                 ← Unified AI client (Groq→OpenRouter→Gemini→Ollama)
+│   ├── charts.js             ← Charts + cards → PNG (Chart.js + Satori)
+│   ├── render.js             ← HTML/CSS → PNG core (satori + resvg + Poppins/emoji)
+│   ├── categorizer.js        ← 100+ keyword → category map
+│   ├── formatter.js          ← Currency, date, progress-bar formatting
+│   ├── commandHelp.js        ← Consistent "how to use this" usage messages
+│   ├── reminderScheduler.js  ← Cron jobs (nudges, digest, bills, recurring)
+│   └── …                     ← currency, predictor, friction, regret, security …
 │
 ├── db/
 │   ├── database.js           ← SQLite connection (better-sqlite3)
 │   ├── schema.js             ← CREATE TABLE statements + default data
-│   └── queries/
-│       ├── users.js          ← User CRUD
-│       ├── expenses.js       ← Expense CRUD + summaries
-│       ├── budgets.js        ← Budget CRUD + alert queries
-│       ├── goals.js          ← Goal CRUD
-│       ├── wallets.js        ← Wallet CRUD + transfers
-│       ├── debts.js          ← Debt CRUD + repayments
-│       └── subscriptions.js  ← Subscription CRUD
+│   ├── migrations.js         ← Versioned migrations (auto-applied on boot)
+│   └── queries/              ← Raw SQL per table (users, expenses, budgets, …)
 │
-├── .env.example
-├── .gitignore
-├── package.json
-└── README.md
+├── assets/fonts/             ← Poppins TTFs used by the image renderer
+├── tests/                    ← Vitest suites (charts, buttons, handlers, parser …)
+├── .env.example · package.json · README.md · START_MAC.md
 ```
 
 ## Design Rules
@@ -197,7 +201,10 @@ The bot automatically checks your budgets when you log expenses:
 
 ## Data Storage
 
-All data is stored locally in `finance.db` (SQLite). Your financial data never leaves your machine. No cloud, no API keys needed (except Telegram).
+All data is stored locally in `finance.db` (SQLite) and never leaves your machine, except
+when an **AI feature** is used — then the relevant message (with basic PII scrubbed) is sent
+to your configured AI provider to generate a reply. Logging, reports, budgets, charts and
+every button work fully offline; only chat, receipt OCR, voice, and AI summaries call out.
 
 ## Sample Conversation
 
