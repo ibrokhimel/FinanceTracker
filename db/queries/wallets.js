@@ -15,6 +15,11 @@ export function createWallet(userId, { name, type, balance }) {
   return getDb().prepare('SELECT * FROM wallets WHERE id = ?').get(info.lastInsertRowid);
 }
 
+export function updateWalletType(walletId, type) {
+  getDb().prepare("UPDATE wallets SET type = ?, updated_at = datetime('now') WHERE id = ?").run(type, walletId);
+  return getWalletById(walletId);
+}
+
 export function updateWalletBalance(walletId, delta) {
   getDb().prepare("UPDATE wallets SET balance = balance + ?, updated_at = datetime('now') WHERE id = ?").run(delta, walletId);
 }

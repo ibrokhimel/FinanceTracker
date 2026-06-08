@@ -12,6 +12,15 @@ export function getGoals(userId, status) {
   return getDb().prepare("SELECT * FROM goals WHERE user_id = ? AND status != 'cancelled' ORDER BY created_at DESC").all(userId);
 }
 
+export function getGoalById(id) {
+  return getDb().prepare('SELECT * FROM goals WHERE id = ?').get(id);
+}
+
+export function setGoalStatus(goalId, status) {
+  getDb().prepare("UPDATE goals SET status = ?, updated_at = datetime('now') WHERE id = ?").run(status, goalId);
+  return getGoalById(goalId);
+}
+
 export function updateGoalProgress(goalId, amount) {
   const db = getDb();
   const goal = db.prepare('SELECT * FROM goals WHERE id = ?').get(goalId);

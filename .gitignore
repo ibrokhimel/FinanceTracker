@@ -23,3 +23,6 @@ coverage/
 
 # Logs
 *.log
+
+# Runtime-generated Twemoji cache (fonts in assets/fonts/ ARE committed)
+assets/emoji-cache/

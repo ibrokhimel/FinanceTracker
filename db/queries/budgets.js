@@ -21,10 +21,23 @@ export function getBudgetById(id) {
   return getDb().prepare('SELECT * FROM budgets WHERE id = ?').get(id);
 }
 
+// `spent` is computed live from the expenses table for the budget's month, so it
+// always reflects reality (deletes/edits included) rather than a stale counter.
+// Category budgets sum that category; an overall budget (category_id IS NULL)
+// sums every expense for the month.
+const SPENT_SUBQUERY = `
+  COALESCE((
+    SELECT SUM(e.amount) FROM expenses e
+    WHERE e.user_id = b.user_id AND e.type = 'expense'
+      AND substr(e.date, 1, 7) = b.month
+      AND (b.category_id IS NULL OR e.category_id = b.category_id)
+  ), 0) AS spent`;
+
 export function getBudgets(userId, month) {
   const m = month || new Date().toISOString().slice(0, 7);
   return getDb().prepare(
-    `SELECT b.*, c.name AS cat_name, c.emoji AS cat_emoji
+    `SELECT b.id, b.user_id, b.category_id, b.amount, b.period, b.month,
+            c.name AS cat_name, c.emoji AS cat_emoji,${SPENT_SUBQUERY}
      FROM budgets b LEFT JOIN categories c ON b.category_id = c.id
      WHERE b.user_id = ? AND b.month = ?
      ORDER BY b.category_id IS NULL DESC, c.name`
@@ -33,9 +46,10 @@ export function getBudgets(userId, month) {
 
 export function getBudgetAlerts(userId) {
   const rows = getDb().prepare(
-    `SELECT b.*, c.name AS cat_name, c.emoji AS cat_emoji
+    `SELECT b.id, b.user_id, b.category_id, b.amount, b.period, b.month,
+            c.name AS cat_name, c.emoji AS cat_emoji,${SPENT_SUBQUERY}
      FROM budgets b LEFT JOIN categories c ON b.category_id = c.id
-     WHERE b.user_id = ? AND b.amount > 0 AND b.spent > 0`
+     WHERE b.user_id = ? AND b.amount > 0`
   ).all(userId);
 
   return rows

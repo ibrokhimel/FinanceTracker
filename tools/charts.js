@@ -1,30 +1,64 @@
 /**
- * Chart generation — returns Buffer (PNG) that can be sent via bot.sendPhoto.
+ * Chart & card generation — every export returns a PNG Buffer for bot.sendPhoto.
  *
- * Each generator is a pure async function: (data) => Buffer
- * Uses chartjs-node-canvas for Chart.js renders, raw node-canvas for custom art.
+ * Two rendering paths:
+ *   • Data charts (donut/bar/line/radar/scatter) → Chart.js via chartjs-node-canvas,
+ *     themed with Poppins + a cohesive dark palette.
+ *   • Cards (score, wallet, goal, badge, wrapped, grades, debt race, heatmap) →
+ *     HTML/CSS via tools/render.js (satori → resvg). Real flexbox, rounded corners,
+ *     shadows, gradients, web fonts. THESE ARE ASYNC.
+ *   • A couple of bespoke plots (hour clock, spending DNA, waterfall) stay on raw
+ *     node-canvas but use the Poppins font + shared palette so they match.
  */
 
 import { ChartJSNodeCanvas } from 'chartjs-node-canvas';
-import { createCanvas } from 'canvas';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { renderCard, THEME, esc, compact } from './render.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const FONT = (f) => path.join(__dirname, '..', 'assets', 'fonts', f);
 
 const W = 1000, H = 600;
+
+/* ─── Chart.js themed canvas ────────────────────────────────────────────── */
+
+const BG = '#0b1220';
+const GRID = 'rgba(148,163,184,0.12)';
 
 const chartCanvas = new ChartJSNodeCanvas({
   width: W,
   height: H,
-  backgroundColour: '#0f172a',
+  backgroundColour: BG,
   chartCallback: (ChartJS) => {
-    ChartJS.defaults.color = '#e2e8f0';
-    ChartJS.defaults.font.family = 'sans-serif';
+    ChartJS.defaults.color = '#cbd5e1';
+    ChartJS.defaults.font.family = 'Poppins';
+    ChartJS.defaults.font.size = 15;
+    ChartJS.defaults.plugins.legend.labels.usePointStyle = true;
+    ChartJS.defaults.plugins.legend.labels.boxWidth = 10;
+    ChartJS.defaults.plugins.legend.labels.padding = 16;
   },
 });
+try {
+  chartCanvas.registerFont(FONT('Poppins-Regular.ttf'),  { family: 'Poppins', weight: 'normal' });
+  chartCanvas.registerFont(FONT('Poppins-SemiBold.ttf'), { family: 'Poppins', weight: '600' });
+  chartCanvas.registerFont(FONT('Poppins-Bold.ttf'),     { family: 'Poppins', weight: 'bold' });
+} catch {}
 
 const PALETTE = [
   '#60a5fa', '#34d399', '#fbbf24', '#f87171', '#a78bfa',
   '#fb7185', '#22d3ee', '#facc15', '#4ade80', '#f472b6',
   '#fcd34d', '#93c5fd', '#86efac', '#fda4af', '#c4b5fd',
 ];
+
+const titleBlock = (text) => ({
+  display: true,
+  text,
+  color: '#f8fafc',
+  font: { family: 'Poppins', size: 24, weight: 'bold' },
+  padding: { top: 8, bottom: 24 },
+});
+const baseLayout = { padding: { top: 24, right: 32, bottom: 24, left: 24 } };
 
 /* ─── 1. Donut: spending by category ────────────────────────────────────── */
 
@@ -36,14 +70,17 @@ export async function donutCategories(byCategory, title = 'Spending by Category'
       datasets: [{
         data: byCategory.map(c => c.total),
         backgroundColor: PALETTE,
-        borderColor: '#0f172a',
-        borderWidth: 2,
+        borderColor: BG,
+        borderWidth: 4,
+        hoverOffset: 6,
       }],
     },
     options: {
+      cutout: '68%',
+      layout: baseLayout,
       plugins: {
-        title:  { display: true, text: title, font: { size: 20 } },
-        legend: { position: 'right', labels: { boxWidth: 14 } },
+        title: titleBlock(title),
+        legend: { position: 'right', labels: { color: '#cbd5e1' } },
       },
     },
   });
@@ -51,21 +88,22 @@ export async function donutCategories(byCategory, title = 'Spending by Category'
 
 /* ─── 2. Bar: income vs expense over months ─────────────────────────────── */
 
-export async function incomeVsExpense(monthly, title = 'Income vs Expense — last months') {
+export async function incomeVsExpense(monthly, title = 'Income vs Expense') {
   return chartCanvas.renderToBuffer({
     type: 'bar',
     data: {
       labels: monthly.map(m => m.month),
       datasets: [
-        { label: 'Income',  data: monthly.map(m => m.income),   backgroundColor: '#34d399' },
-        { label: 'Expense', data: monthly.map(m => m.expenses), backgroundColor: '#f87171' },
+        { label: 'Income',  data: monthly.map(m => m.income),   backgroundColor: '#34d399', borderRadius: 8, maxBarThickness: 48 },
+        { label: 'Expense', data: monthly.map(m => m.expenses), backgroundColor: '#f87171', borderRadius: 8, maxBarThickness: 48 },
       ],
     },
     options: {
-      plugins: { title: { display: true, text: title, font: { size: 20 } } },
+      layout: baseLayout,
+      plugins: { title: titleBlock(title), legend: { position: 'top' } },
       scales: {
-        x: { ticks: { color: '#cbd5e1' } },
-        y: { ticks: { color: '#cbd5e1' } },
+        x: { grid: { display: false }, ticks: { color: '#cbd5e1' } },
+        y: { grid: { color: GRID }, border: { display: false }, ticks: { color: '#94a3b8', callback: v => compact(v) } },
       },
     },
   });
@@ -82,12 +120,29 @@ export async function netWorthCurve(points, title = 'Net Worth') {
         label: 'Net worth',
         data: points.map(p => p.value),
         borderColor: '#60a5fa',
-        backgroundColor: 'rgba(96,165,250,0.2)',
+        borderWidth: 3,
+        backgroundColor: (ctx) => {
+          const { chartArea, ctx: c } = ctx.chart;
+          if (!chartArea) return 'rgba(96,165,250,0.15)';
+          const g = c.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+          g.addColorStop(0, 'rgba(96,165,250,0.45)');
+          g.addColorStop(1, 'rgba(96,165,250,0.00)');
+          return g;
+        },
         fill: true,
-        tension: 0.3,
+        tension: 0.4,
+        pointRadius: 0,
+        pointHoverRadius: 4,
       }],
     },
-    options: { plugins: { title: { display: true, text: title, font: { size: 20 } } } },
+    options: {
+      layout: baseLayout,
+      plugins: { title: titleBlock(title), legend: { display: false } },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: '#94a3b8' } },
+        y: { grid: { color: GRID }, border: { display: false }, ticks: { color: '#94a3b8', callback: v => compact(v) } },
+      },
+    },
   });
 }
 
@@ -102,16 +157,29 @@ export async function weeklyRadar(weekTotals, title = 'Weekly Spending Rhythm') 
       datasets: [{
         label: 'Spending',
         data: labels.map((_, i) => weekTotals[i] || 0),
-        backgroundColor: 'rgba(251,191,36,0.3)',
-        borderColor: '#fbbf24',
-        pointBackgroundColor: '#fbbf24',
+        backgroundColor: 'rgba(96,165,250,0.25)',
+        borderColor: '#60a5fa',
+        borderWidth: 2,
+        pointBackgroundColor: '#60a5fa',
+        pointRadius: 3,
       }],
     },
-    options: { plugins: { title: { display: true, text: title, font: { size: 20 } } } },
+    options: {
+      layout: baseLayout,
+      plugins: { title: titleBlock(title), legend: { display: false } },
+      scales: {
+        r: {
+          angleLines: { color: GRID },
+          grid: { color: GRID },
+          pointLabels: { color: '#cbd5e1', font: { family: 'Poppins', size: 14 } },
+          ticks: { display: false, backdropColor: 'transparent' },
+        },
+      },
+    },
   });
 }
 
-/* ─── 5. Budget thermometers ────────────────────────────────────────────── */
+/* ─── 5. Budget bars (horizontal % used) ────────────────────────────────── */
 
 export async function budgetThermometers(budgets, title = 'Budget Status') {
   return chartCanvas.renderToBuffer({
@@ -119,308 +187,238 @@ export async function budgetThermometers(budgets, title = 'Budget Status') {
     data: {
       labels: budgets.map(b => `${b.emoji || ''} ${b.name}`),
       datasets: [{
-        label: 'Spent / Budget',
+        label: '% used',
         data: budgets.map(b => b.amount > 0 ? Math.min(100, (b.spent / b.amount) * 100) : 0),
-        backgroundColor: budgets.map(b => {
-          const pct = b.amount > 0 ? (b.spent / b.amount) * 100 : 0;
-          if (pct >= 100) return '#ef4444';
-          if (pct >= 80)  return '#f59e0b';
-          if (pct >= 50)  return '#facc15';
-          return '#22c55e';
-        }),
+        backgroundColor: budgets.map(b => THEME.grade(b.amount > 0 ? (b.spent / b.amount) * 100 : 0)),
+        borderRadius: 8,
+        maxBarThickness: 38,
       }],
     },
     options: {
       indexAxis: 'y',
-      plugins: { title: { display: true, text: title, font: { size: 20 } } },
-      scales: { x: { max: 100, ticks: { callback: v => v + '%' } } },
+      layout: baseLayout,
+      plugins: { title: titleBlock(title), legend: { display: false } },
+      scales: {
+        x: { max: 100, grid: { color: GRID }, border: { display: false }, ticks: { color: '#94a3b8', callback: v => v + '%' } },
+        y: { grid: { display: false }, ticks: { color: '#e2e8f0' } },
+      },
     },
   });
 }
 
-/* ─── 6. Heatmap calendar (raw canvas) ──────────────────────────────────── */
+/* ─── 6. Heatmap calendar (satori) ──────────────────────────────────────── */
 
-export function heatmapCalendar(dailyTotals, title = 'Spending Heatmap') {
-  // dailyTotals: [{date:'YYYY-MM-DD', total:Number}, ...] for last ~365 days
-  const c = createCanvas(W, H);
-  const ctx = c.getContext('2d');
-  ctx.fillStyle = '#0f172a';
-  ctx.fillRect(0, 0, W, H);
-  ctx.fillStyle = '#e2e8f0';
-  ctx.font = '24px sans-serif';
-  ctx.fillText(title, 24, 40);
-
-  const cell = 14, gap = 3, cols = 53;
-  const startX = 60, startY = 80;
-  const max = Math.max(1, ...dailyTotals.map(d => d.total));
-
-  // Build a date → total map
+export async function heatmapCalendar(dailyTotals, title = 'Spending Heatmap') {
   const byDate = new Map(dailyTotals.map(d => [d.date, d.total]));
-
-  // Walk last 53 weeks
+  const max = Math.max(1, ...dailyTotals.map(d => d.total));
+  const cols = 53;
   const today = new Date();
   const dayMs = 86400000;
-  for (let week = 0; week < cols; week++) {
-    for (let day = 0; day < 7; day++) {
+
+  const shade = (v) => {
+    if (!v) return 'rgba(255,255,255,0.05)';
+    const t = Math.min(1, v / max);
+    // emerald → amber → red ramp
+    const stops = [[52,211,153],[251,191,36],[248,113,113]];
+    const seg = t < 0.5 ? 0 : 1;
+    const lt = t < 0.5 ? t / 0.5 : (t - 0.5) / 0.5;
+    const a = stops[seg], b = stops[seg + 1];
+    const c = a.map((x, i) => Math.round(x + (b[i] - x) * lt));
+    return `rgb(${c[0]},${c[1]},${c[2]})`;
+  };
+
+  let rows = '';
+  for (let day = 0; day < 7; day++) {
+    let cells = '';
+    for (let week = 0; week < cols; week++) {
       const offset = (cols - 1 - week) * 7 + (6 - day);
       const date = new Date(today.getTime() - offset * dayMs).toISOString().slice(0, 10);
-      const v = byDate.get(date) || 0;
-      const intensity = v / max;
-      const r = Math.round(15  + intensity * 235);
-      const g = Math.round(118 - intensity * 60);
-      const b = Math.round(110 - intensity * 80);
-      ctx.fillStyle = v === 0 ? '#1e293b' : `rgb(${r},${g},${b})`;
-      ctx.fillRect(startX + week * (cell + gap), startY + day * (cell + gap), cell, cell);
+      cells += `<div style="display:flex; width:14px; height:14px; border-radius:4px; margin-right:4px; background:${shade(byDate.get(date) || 0)};"></div>`;
     }
+    rows += `<div style="display:flex; margin-bottom:4px;">${cells}</div>`;
   }
 
-  // Legend
-  ctx.fillStyle = '#94a3b8';
-  ctx.font = '14px sans-serif';
-  ctx.fillText('less', startX, startY + 8 * (cell + gap) + 24);
-  ctx.fillText('more', startX + cols * (cell + gap) - 40, startY + 8 * (cell + gap) + 24);
-
-  return c.toBuffer('image/png');
+  const html = `
+    <div style="display:flex; flex-direction:column; width:100%; height:100%; padding:48px; background:${THEME.bg}; font-family:Poppins;">
+      <div style="display:flex; align-items:center; font-size:30px; font-weight:700; color:${THEME.ink}; margin-bottom:8px;">🔥 ${esc(title)}</div>
+      <div style="display:flex; font-size:16px; color:${THEME.inkMuted}; margin-bottom:28px;">Last 12 months</div>
+      <div style="display:flex; flex-direction:column;">${rows}</div>
+      <div style="display:flex; align-items:center; margin-top:24px; font-size:15px; color:${THEME.inkMuted};">
+        <div style="display:flex;">less</div>
+        <div style="display:flex; width:14px; height:14px; border-radius:4px; margin:0 4px 0 12px; background:rgba(255,255,255,0.05);"></div>
+        <div style="display:flex; width:14px; height:14px; border-radius:4px; margin:0 4px; background:rgb(52,211,153);"></div>
+        <div style="display:flex; width:14px; height:14px; border-radius:4px; margin:0 4px; background:rgb(251,191,36);"></div>
+        <div style="display:flex; width:14px; height:14px; border-radius:4px; margin:0 12px 0 4px; background:rgb(248,113,113);"></div>
+        <div style="display:flex;">more</div>
+      </div>
+    </div>`;
+  return renderCard(html, { width: 900, height: 360 });
 }
 
-/* ─── 7. Goal progress card (raw canvas) ────────────────────────────────── */
+/* ─── 7. Goal progress card (satori) ────────────────────────────────────── */
 
-export function goalCard({ name, current, target, deadline, currency = 'UZS' }) {
-  const cw = 800, ch = 400;
-  const c = createCanvas(cw, ch);
-  const ctx = c.getContext('2d');
-
-  // gradient background
-  const grad = ctx.createLinearGradient(0, 0, cw, ch);
-  grad.addColorStop(0, '#1e3a8a');
-  grad.addColorStop(1, '#0f766e');
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, cw, ch);
-
-  ctx.fillStyle = '#fef3c7';
-  ctx.font = 'bold 36px sans-serif';
-  ctx.fillText('🎯 ' + name, 40, 70);
-
-  ctx.font = '20px sans-serif';
-  ctx.fillStyle = '#e0f2fe';
+export async function goalCard({ name, current, target, deadline, currency = 'UZS' }) {
   const pct = target > 0 ? Math.min(100, (current / target) * 100) : 0;
-  ctx.fillText(`${pct.toFixed(1)}% of target`, 40, 110);
-
-  // bar
-  const barX = 40, barY = 200, barW = cw - 80, barH = 50;
-  ctx.fillStyle = 'rgba(255,255,255,0.15)';
-  ctx.fillRect(barX, barY, barW, barH);
-  ctx.fillStyle = '#34d399';
-  ctx.fillRect(barX, barY, (pct / 100) * barW, barH);
-
-  ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 28px sans-serif';
-  ctx.fillText(`${Math.round(current).toLocaleString()} / ${Math.round(target).toLocaleString()} ${currency}`, 40, 310);
-
-  if (deadline) {
-    ctx.font = '18px sans-serif';
-    ctx.fillStyle = '#cbd5e1';
-    ctx.fillText(`📅 Deadline: ${deadline}`, 40, 350);
-  }
-
-  return c.toBuffer('image/png');
+  const html = `
+    <div style="display:flex; flex-direction:column; width:100%; height:100%; padding:56px; background:${THEME.bgEmerald}; font-family:Poppins;">
+      <div style="display:flex; align-items:center; font-size:34px; font-weight:700; color:${THEME.ink};">🎯 ${esc(name)}</div>
+      <div style="display:flex; align-items:flex-end; margin-top:24px;">
+        <div style="display:flex; font-size:88px; font-weight:800; color:${THEME.ink}; line-height:1;">${pct.toFixed(0)}<span style="font-size:40px; color:${THEME.inkSoft}; padding-bottom:8px;">%</span></div>
+        <div style="display:flex; font-size:22px; color:${THEME.inkSoft}; padding:0 0 18px 16px;">of target</div>
+      </div>
+      <div style="display:flex; width:100%; height:26px; border-radius:13px; background:rgba(0,0,0,0.25); margin-top:28px;">
+        <div style="display:flex; width:${Math.max(2, pct)}%; height:26px; border-radius:13px; background:linear-gradient(90deg,#a7f3d0,#34d399);"></div>
+      </div>
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-top:24px;">
+        <div style="display:flex; font-size:30px; font-weight:700; color:${THEME.ink};">${Math.round(current).toLocaleString()} / ${Math.round(target).toLocaleString()} ${esc(currency)}</div>
+      </div>
+      ${deadline ? `<div style="display:flex; font-size:18px; color:${THEME.inkSoft}; margin-top:16px;">🗓️ Deadline: ${esc(deadline)}</div>` : ''}
+    </div>`;
+  return renderCard(html, { width: 860, height: 460 });
 }
 
-/* ─── 8. Score card (raw canvas) ────────────────────────────────────────── */
+/* ─── 8. Financial health score card (satori) ───────────────────────────── */
 
-export function scoreCard({ score, subscores = {} }) {
-  const cw = 800, ch = 500;
-  const c = createCanvas(cw, ch);
-  const ctx = c.getContext('2d');
+const SCORE_MAX = { Budget: 40, Savings: 20, Debt: 15, Streak: 15, Goals: 10 };
 
-  ctx.fillStyle = '#020617';
-  ctx.fillRect(0, 0, cw, ch);
+export async function scoreCard({ score, subscores = {} }) {
+  const s = Math.max(0, Math.min(100, Math.round(score)));
+  const grade = s >= 85 ? 'A' : s >= 70 ? 'B' : s >= 55 ? 'C' : s >= 40 ? 'D' : 'F';
+  const ringColor = s >= 70 ? THEME.good : s >= 40 ? THEME.warn : THEME.bad;
 
-  ctx.fillStyle = '#fbbf24';
-  ctx.font = 'bold 32px sans-serif';
-  ctx.fillText('Financial Health Score', 40, 60);
+  const bars = Object.entries(subscores).map(([k, v]) => {
+    const max = SCORE_MAX[k] || Math.max(v, 1);
+    const pct = Math.max(2, Math.min(100, (v / max) * 100));
+    return `
+      <div style="display:flex; flex-direction:column; margin-bottom:18px;">
+        <div style="display:flex; justify-content:space-between; font-size:18px; color:${THEME.inkSoft}; margin-bottom:6px;">
+          <div style="display:flex;">${esc(k)}</div>
+          <div style="display:flex; color:${THEME.ink}; font-weight:600;">${Math.round(v)}/${max}</div>
+        </div>
+        <div style="display:flex; width:100%; height:12px; border-radius:6px; background:rgba(255,255,255,0.08);">
+          <div style="display:flex; width:${pct}%; height:12px; border-radius:6px; background:${THEME.grade(100 - pct)};"></div>
+        </div>
+      </div>`;
+  }).join('');
 
-  // big circle
-  const cx = 400, cy = 240, r = 130;
-  ctx.lineWidth = 18;
-  ctx.strokeStyle = '#1e293b';
-  ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.stroke();
-
-  const pct = Math.max(0, Math.min(100, score)) / 100;
-  ctx.strokeStyle = pct > 0.7 ? '#22c55e' : pct > 0.4 ? '#f59e0b' : '#ef4444';
-  ctx.beginPath();
-  ctx.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + pct * Math.PI * 2);
-  ctx.stroke();
-
-  ctx.fillStyle = '#f8fafc';
-  ctx.font = 'bold 72px sans-serif';
-  const txt = String(Math.round(score));
-  const m = ctx.measureText(txt);
-  ctx.fillText(txt, cx - m.width / 2, cy + 24);
-
-  // sub-scores
-  let y = 420;
-  ctx.font = '16px sans-serif';
-  ctx.fillStyle = '#cbd5e1';
-  const items = Object.entries(subscores);
-  const colW = (cw - 80) / Math.max(1, items.length);
-  items.forEach(([k, v], i) => {
-    const x = 40 + i * colW;
-    ctx.fillText(k, x, y);
-    ctx.fillStyle = '#fbbf24';
-    ctx.fillText(String(Math.round(v)), x, y + 24);
-    ctx.fillStyle = '#cbd5e1';
-  });
-
-  return c.toBuffer('image/png');
+  const html = `
+    <div style="display:flex; flex-direction:column; width:100%; height:100%; padding:56px; background:${THEME.bg}; font-family:Poppins;">
+      <div style="display:flex; align-items:center; font-size:30px; font-weight:700; color:${THEME.ink};">💯 Financial Health Score</div>
+      <div style="display:flex; flex:1; align-items:center; margin-top:28px;">
+        <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; width:300px; height:300px; border-radius:150px; border:16px solid ${ringColor}; background:rgba(255,255,255,0.03); margin-right:56px;">
+          <div style="display:flex; font-size:110px; font-weight:800; color:${THEME.ink}; line-height:1;">${s}</div>
+          <div style="display:flex; font-size:22px; color:${THEME.inkMuted};">Grade ${grade}</div>
+        </div>
+        <div style="display:flex; flex-direction:column; flex:1;">${bars}</div>
+      </div>
+    </div>`;
+  return renderCard(html, { width: 920, height: 540 });
 }
 
-/* ─── 9. Hour-of-day clock ──────────────────────────────────────────────── */
+/* ─── 9. Hour-of-day clock — radial sunburst (satori) ───────────────────── */
 
-export function hourClock(hourTotals, title = 'Hour-of-Day Pattern') {
-  // hourTotals: array of 24 numbers
-  const cw = 600, ch = 600;
-  const c = createCanvas(cw, ch);
-  const ctx = c.getContext('2d');
-  ctx.fillStyle = '#0f172a';
-  ctx.fillRect(0, 0, cw, ch);
-  ctx.fillStyle = '#e2e8f0';
-  ctx.font = '20px sans-serif';
-  ctx.fillText(title, 40, 40);
-
-  const cx = cw / 2, cy = ch / 2 + 20, ringR = 200;
+export async function hourClock(hourTotals, title = 'Hour-of-Day Pattern') {
+  const S = 640, cx = S / 2, cy = S / 2, innerR = 56, maxLen = 200, barW = 15;
   const max = Math.max(1, ...hourTotals);
 
+  let bars = '';
   for (let h = 0; h < 24; h++) {
-    const a1 = (h / 24) * Math.PI * 2 - Math.PI / 2;
-    const a2 = ((h + 1) / 24) * Math.PI * 2 - Math.PI / 2;
-    const len = (hourTotals[h] / max) * ringR;
-    const intensity = hourTotals[h] / max;
-    ctx.fillStyle = `rgba(96,165,250,${0.2 + intensity * 0.8})`;
-    ctx.beginPath();
-    ctx.moveTo(cx, cy);
-    ctx.arc(cx, cy, 50 + len, a1, a2);
-    ctx.closePath();
-    ctx.fill();
+    const len = Math.max(4, (hourTotals[h] / max) * maxLen);
+    const inten = hourTotals[h] / max;
+    const top = cy - innerR - len, left = cx - barW / 2;
+    bars += `<div style="display:flex; position:absolute; left:${left}px; top:${top}px; width:${barW}px; height:${len}px; border-radius:8px; background:rgba(96,165,250,${(0.22 + inten * 0.78).toFixed(3)}); transform:rotate(${h * 15}deg); transform-origin:${barW / 2}px ${len + innerR}px;"></div>`;
   }
+  const labels = [['0:00', cx - 18, cy - innerR - maxLen - 34], ['6:00', cx + innerR + maxLen + 4, cy - 10], ['12:00', cx - 22, cy + innerR + maxLen + 12], ['18:00', cx - innerR - maxLen - 64, cy - 10]]
+    .map(([t, x, y]) => `<div style="display:flex; position:absolute; left:${x}px; top:${y}px; font-size:14px; color:${THEME.inkMuted};">${t}</div>`).join('');
 
-  // hour labels
-  ctx.fillStyle = '#94a3b8';
-  ctx.font = '12px sans-serif';
-  for (let h = 0; h < 24; h += 3) {
-    const ang = (h / 24) * Math.PI * 2 - Math.PI / 2;
-    const x = cx + Math.cos(ang) * (ringR + 30);
-    const y = cy + Math.sin(ang) * (ringR + 30);
-    ctx.fillText(h + ':00', x - 14, y + 5);
-  }
-
-  return c.toBuffer('image/png');
+  const html = `
+    <div style="display:flex; position:relative; width:100%; height:100%; background:${THEME.bg}; font-family:Poppins;">
+      <div style="display:flex; position:absolute; left:40px; top:32px; font-size:26px; font-weight:700; color:${THEME.ink};">🕐 ${esc(title)}</div>
+      <div style="display:flex; position:absolute; left:${cx - innerR}px; top:${cy - innerR}px; width:${innerR * 2}px; height:${innerR * 2}px; border-radius:${innerR}px; border:1px solid rgba(148,163,184,0.25);"></div>
+      ${bars}${labels}
+    </div>`;
+  return renderCard(html, { width: S, height: S });
 }
 
-/* ─── 10. Cash flow waterfall ──────────────────────────────────────────── */
+/* ─── 10. Cash flow waterfall — floating bars (satori) ──────────────────── */
 
-export function cashFlowWaterfall({ opening, incomes, expenses, closing }) {
-  const cw = 1000, ch = 600;
-  const c = createCanvas(cw, ch);
-  const ctx = c.getContext('2d');
-  ctx.fillStyle = '#0f172a';
-  ctx.fillRect(0, 0, cw, ch);
-
-  ctx.fillStyle = '#e2e8f0';
-  ctx.font = 'bold 22px sans-serif';
-  ctx.fillText('Cash Flow Waterfall', 30, 36);
-
+export async function cashFlowWaterfall({ opening, incomes, expenses, closing }) {
+  const CH = 380;
+  const baseline = CH - 20;
   const blocks = [
     { label: 'Opening', value: opening, kind: 'base' },
     ...incomes.slice(0, 5).map(i => ({ label: i.name, value: i.amount, kind: 'income' })),
     ...expenses.slice(0, 5).map(e => ({ label: e.name, value: -e.amount, kind: 'expense' })),
     { label: 'Closing', value: closing, kind: 'base' },
   ];
-
-  const all = blocks.map(b => b.value).filter(v => v !== 0);
-  const maxAbs = Math.max(opening, closing, ...all.map(Math.abs)) || 1;
-  const baseY = ch - 80;
-  const scale = (ch - 180) / maxAbs;
-  const bw = (cw - 80) / blocks.length - 10;
+  const maxAbs = Math.max(opening, closing, ...blocks.map(b => Math.abs(b.value))) || 1;
+  const scale = (CH - 60) / maxAbs;
   let running = 0;
 
-  blocks.forEach((b, i) => {
-    const x = 40 + i * (bw + 10);
-    let top, height, fill;
+  const cols = blocks.map(b => {
+    let top, h, fill;
     if (b.kind === 'base') {
-      top = baseY - b.value * scale;
-      height = b.value * scale;
-      fill = '#60a5fa';
-      running = b.value;
+      top = baseline - b.value * scale; h = b.value * scale; fill = '#60a5fa'; running = b.value;
     } else {
-      const startVal = running;
-      running += b.value;
-      const y1 = baseY - startVal * scale;
-      const y2 = baseY - running * scale;
-      top = Math.min(y1, y2);
-      height = Math.abs(y2 - y1);
-      fill = b.value > 0 ? '#22c55e' : '#ef4444';
+      const s = running; running += b.value;
+      const y1 = baseline - s * scale, y2 = baseline - running * scale;
+      top = Math.min(y1, y2); h = Math.abs(y2 - y1); fill = b.value > 0 ? '#34d399' : '#f87171';
     }
-    ctx.fillStyle = fill;
-    ctx.fillRect(x, top, bw, height);
-    ctx.fillStyle = '#cbd5e1';
-    ctx.font = '11px sans-serif';
-    ctx.fillText(b.label.slice(0, 14), x, baseY + 18);
-    ctx.fillText(String(Math.round(Math.abs(b.value)).toLocaleString()), x, baseY + 34);
-  });
+    h = Math.max(3, h);
+    return `
+      <div style="display:flex; flex-direction:column; align-items:center; flex:1;">
+        <div style="display:flex; flex-direction:column; align-items:center; width:100%; height:${CH}px;">
+          <div style="display:flex; height:${Math.max(0, Math.round(top))}px;"></div>
+          <div style="display:flex; width:62%; height:${Math.round(h)}px; border-radius:8px; background:${fill};"></div>
+        </div>
+        <div style="display:flex; font-size:13px; color:${THEME.inkSoft}; margin-top:8px;">${esc(b.label).slice(0, 12)}</div>
+        <div style="display:flex; font-size:13px; font-weight:600; color:${THEME.inkMuted};">${compact(Math.abs(b.value))}</div>
+      </div>`;
+  }).join('');
 
-  return c.toBuffer('image/png');
+  const html = `
+    <div style="display:flex; flex-direction:column; width:100%; height:100%; padding:40px; background:${THEME.bg}; font-family:Poppins;">
+      <div style="display:flex; align-items:center; font-size:26px; font-weight:700; color:${THEME.ink}; margin-bottom:20px;">💧 Cash Flow Waterfall</div>
+      <div style="display:flex; flex:1; align-items:flex-start;">${cols}</div>
+    </div>`;
+  return renderCard(html, { width: 1000, height: 600 });
 }
 
-/* ─── 11. Spending DNA strand ──────────────────────────────────────────── */
+/* ─── 11. Spending DNA strand — dot scatter (satori) ────────────────────── */
 
-export function spendingDNA(expenses, title = 'Your Spending DNA') {
-  const cw = 1200, ch = 400;
-  const c = createCanvas(cw, ch);
-  const ctx = c.getContext('2d');
-  ctx.fillStyle = '#020617';
-  ctx.fillRect(0, 0, cw, ch);
-
-  ctx.fillStyle = '#e2e8f0';
-  ctx.font = 'bold 22px sans-serif';
-  ctx.fillText(title, 30, 36);
-
-  // pick last ~120 expenses
+export async function spendingDNA(expenses, title = 'Your Spending DNA') {
+  const cw = 1200, ch = 420, cy = ch / 2 + 24;
   const items = expenses.slice(0, 120);
+
   if (!items.length) {
-    ctx.fillStyle = '#64748b';
-    ctx.fillText('No expenses to render.', 30, ch / 2);
-    return c.toBuffer('image/png');
+    const empty = `
+      <div style="display:flex; flex-direction:column; width:100%; height:100%; padding:40px; background:${THEME.bg}; font-family:Poppins;">
+        <div style="display:flex; align-items:center; font-size:26px; font-weight:700; color:${THEME.ink};">🧬 ${esc(title)}</div>
+        <div style="display:flex; flex:1; align-items:center; justify-content:center; font-size:18px; color:${THEME.inkMuted};">No expenses to render yet.</div>
+      </div>`;
+    return renderCard(empty, { width: cw, height: ch });
   }
 
-  const max = Math.max(...items.map(e => e.amount), 1);
-  const cy = ch / 2 + 30;
-
-  // colour bands by category id mod palette
-  items.forEach((e, i) => {
+  const max = Math.max(1, ...items.map(e => e.amount));
+  const dots = items.map((e, i) => {
     const t = i / Math.max(1, items.length - 1);
     const x = 50 + t * (cw - 100);
-    const amp = 60 * Math.sin(t * Math.PI * 6);
-    const y = cy + amp;
+    const y = cy + 64 * Math.sin(t * Math.PI * 6);
     const r = 4 + (e.amount / max) * 22;
-    const colour = PALETTE[(e.category_id || 0) % PALETTE.length];
-    ctx.fillStyle = colour;
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
-    ctx.fill();
-  });
+    const col = PALETTE[(e.category_id || 0) % PALETTE.length];
+    return `<div style="display:flex; position:absolute; left:${(x - r).toFixed(1)}px; top:${(y - r).toFixed(1)}px; width:${(r * 2).toFixed(1)}px; height:${(r * 2).toFixed(1)}px; border-radius:${r.toFixed(1)}px; background:${col};"></div>`;
+  }).join('');
 
-  // baseline
-  ctx.strokeStyle = '#334155';
-  ctx.beginPath();
-  ctx.moveTo(50, cy); ctx.lineTo(cw - 50, cy); ctx.stroke();
-
-  return c.toBuffer('image/png');
+  const html = `
+    <div style="display:flex; position:relative; width:100%; height:100%; background:${THEME.bg}; font-family:Poppins;">
+      <div style="display:flex; position:absolute; left:40px; top:32px; font-size:26px; font-weight:700; color:${THEME.ink};">🧬 ${esc(title)}</div>
+      <div style="display:flex; position:absolute; left:50px; top:${cy}px; width:${cw - 100}px; height:1px; background:rgba(148,163,184,0.18);"></div>
+      ${dots}
+    </div>`;
+  return renderCard(html, { width: cw, height: ch });
 }
 
-/* ─── 12. Correlation scatter (day-of-month vs amount) ─────────────────── */
+/* ─── 12. Correlation scatter ───────────────────────────────────────────── */
 
 export async function dayOfMonthScatter(points, title = 'Day-of-Month vs Amount') {
   return chartCanvas.renderToBuffer({
@@ -429,22 +427,24 @@ export async function dayOfMonthScatter(points, title = 'Day-of-Month vs Amount'
       datasets: [{
         label: 'Expenses',
         data: points.map(p => ({ x: p.day, y: p.amount })),
-        backgroundColor: '#f87171',
+        backgroundColor: 'rgba(248,113,113,0.7)',
+        pointRadius: 5,
       }],
     },
     options: {
-      plugins: { title: { display: true, text: title, font: { size: 20 } } },
+      layout: baseLayout,
+      plugins: { title: titleBlock(title), legend: { display: false } },
       scales: {
-        x: { title: { display: true, text: 'Day of month' }, min: 1, max: 31 },
-        y: { title: { display: true, text: 'Amount' } },
+        x: { title: { display: true, text: 'Day of month', color: '#94a3b8' }, min: 1, max: 31, grid: { color: GRID }, ticks: { color: '#94a3b8' } },
+        y: { title: { display: true, text: 'Amount', color: '#94a3b8' }, grid: { color: GRID }, border: { display: false }, ticks: { color: '#94a3b8', callback: v => compact(v) } },
       },
     },
   });
 }
 
-/* ─── 13. Category drift (multi-line, last 6 months %) ─────────────────── */
+/* ─── 13. Category drift (multi-line, %) ────────────────────────────────── */
 
-export async function categoryDrift(months, perCategory, title = 'Category Drift (6 months)') {
+export async function categoryDrift(months, perCategory, title = 'Category Drift') {
   return chartCanvas.renderToBuffer({
     type: 'line',
     data: {
@@ -453,193 +453,138 @@ export async function categoryDrift(months, perCategory, title = 'Category Drift
         label: name,
         data: vals,
         borderColor: PALETTE[i],
-        backgroundColor: PALETTE[i] + '33',
-        tension: 0.3,
+        backgroundColor: PALETTE[i] + '22',
+        borderWidth: 3,
+        tension: 0.4,
+        pointRadius: 0,
         fill: false,
       })),
     },
     options: {
-      plugins: { title: { display: true, text: title, font: { size: 20 } } },
-      scales: { y: { ticks: { callback: v => v + '%' } } },
+      layout: baseLayout,
+      plugins: { title: titleBlock(title), legend: { position: 'top' } },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: '#94a3b8' } },
+        y: { grid: { color: GRID }, border: { display: false }, ticks: { color: '#94a3b8', callback: v => v + '%' } },
+      },
     },
   });
 }
 
-/* ─── 14. Debt payoff race track ───────────────────────────────────────── */
+/* ─── 14. Debt payoff race track (satori) ───────────────────────────────── */
 
-export function debtRaceTrack(debts) {
-  const cw = 900, ch = 500;
-  const c = createCanvas(cw, ch);
-  const ctx = c.getContext('2d');
-  ctx.fillStyle = '#052e16';
-  ctx.fillRect(0, 0, cw, ch);
+export async function debtRaceTrack(debts) {
+  const lanes = debts.slice(0, 6).map(d => {
+    const pct = d.amount > 0 ? Math.round((1 - d.remaining_amount / d.amount) * 100) : 0;
+    const fill = d.type === 'lent' ? '#34d399' : '#f87171';
+    return `
+      <div style="display:flex; flex-direction:column; margin-bottom:18px;">
+        <div style="display:flex; justify-content:space-between; font-size:17px; color:${THEME.inkSoft}; margin-bottom:6px;">
+          <div style="display:flex;">${esc(d.person_name)} · ${esc(d.type)}</div>
+          <div style="display:flex; color:${THEME.ink}; font-weight:600;">${pct}%</div>
+        </div>
+        <div style="display:flex; align-items:center; width:100%; height:30px; border-radius:15px; background:rgba(255,255,255,0.06);">
+          <div style="display:flex; align-items:center; justify-content:flex-end; width:${Math.max(8, pct)}%; height:30px; border-radius:15px; background:${fill};">
+            <div style="display:flex; font-size:22px; margin-right:4px;">🏎️</div>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
 
-  ctx.fillStyle = '#bbf7d0';
-  ctx.font = 'bold 22px sans-serif';
-  ctx.fillText('🏁 Debt Payoff Race', 30, 40);
-
-  const laneH = 60, trackW = cw - 200;
-  debts.slice(0, 6).forEach((d, i) => {
-    const y = 80 + i * laneH;
-    // lane
-    ctx.fillStyle = '#1f2937';
-    ctx.fillRect(160, y, trackW, laneH - 16);
-    // progress
-    const pct = d.amount > 0 ? 1 - (d.remaining_amount / d.amount) : 0;
-    ctx.fillStyle = d.type === 'lent' ? '#22c55e' : '#f87171';
-    ctx.fillRect(160, y, trackW * pct, laneH - 16);
-    // car
-    ctx.font = '26px sans-serif';
-    ctx.fillStyle = '#fde68a';
-    ctx.fillText('🏎️', 160 + trackW * pct - 10, y + 30);
-    // label
-    ctx.fillStyle = '#f1f5f9';
-    ctx.font = '14px sans-serif';
-    ctx.fillText(`${d.person_name} (${d.type})`, 20, y + 26);
-    ctx.fillText(`${Math.round(pct * 100)}%`, 20, y + 42);
-  });
-  return c.toBuffer('image/png');
+  const html = `
+    <div style="display:flex; flex-direction:column; width:100%; height:100%; padding:48px; background:${THEME.bgEmerald}; font-family:Poppins;">
+      <div style="display:flex; align-items:center; font-size:30px; font-weight:700; color:${THEME.ink}; margin-bottom:28px;">🏁 Debt Payoff Race</div>
+      <div style="display:flex; flex-direction:column;">${lanes}</div>
+    </div>`;
+  return renderCard(html, { width: 900, height: 140 + debts.slice(0, 6).length * 72 });
 }
 
-/* ─── 15. Per-category budget A-F scorecard ────────────────────────────── */
+/* ─── 15. Per-category budget A–F scorecard (satori) ────────────────────── */
 
-export function budgetGradeCard(budgets) {
-  const cw = 800, ch = 100 + budgets.length * 60;
-  const c = createCanvas(cw, ch);
-  const ctx = c.getContext('2d');
-  ctx.fillStyle = '#0f172a';
-  ctx.fillRect(0, 0, cw, ch);
-  ctx.fillStyle = '#fbbf24';
-  ctx.font = 'bold 22px sans-serif';
-  ctx.fillText('Budget Scorecard', 30, 40);
-
-  budgets.forEach((b, i) => {
-    const y = 80 + i * 60;
+export async function budgetGradeCard(budgets) {
+  const rows = budgets.map(b => {
     const pct = b.amount > 0 ? (b.spent / b.amount) * 100 : 0;
     const grade = pct <= 60 ? 'A' : pct <= 80 ? 'B' : pct <= 100 ? 'C' : pct <= 120 ? 'D' : 'F';
-    const colour = { A: '#22c55e', B: '#84cc16', C: '#f59e0b', D: '#f87171', F: '#dc2626' }[grade];
+    const color = { A: '#34d399', B: '#84cc16', C: '#fbbf24', D: '#fb923c', F: '#f87171' }[grade];
+    return `
+      <div style="display:flex; align-items:center; justify-content:space-between; padding:16px 20px; margin-bottom:12px; border-radius:16px; background:${THEME.panel}; border:1px solid ${THEME.panelBorder};">
+        <div style="display:flex; flex-direction:column;">
+          <div style="display:flex; font-size:22px; font-weight:600; color:${THEME.ink};">${esc(b.emoji || '')} ${esc(b.name)}</div>
+          <div style="display:flex; font-size:15px; color:${THEME.inkMuted}; margin-top:2px;">${Math.round(pct)}% used</div>
+        </div>
+        <div style="display:flex; font-size:52px; font-weight:800; color:${color};">${grade}</div>
+      </div>`;
+  }).join('');
 
-    ctx.fillStyle = '#e2e8f0';
-    ctx.font = '18px sans-serif';
-    ctx.fillText(`${b.emoji || ''} ${b.name}`, 30, y);
-
-    ctx.fillStyle = '#94a3b8';
-    ctx.font = '14px sans-serif';
-    ctx.fillText(`${Math.round(pct)}% used`, 30, y + 22);
-
-    ctx.fillStyle = colour;
-    ctx.font = 'bold 44px sans-serif';
-    ctx.fillText(grade, cw - 100, y + 24);
-  });
-  return c.toBuffer('image/png');
+  const html = `
+    <div style="display:flex; flex-direction:column; width:100%; height:100%; padding:48px; background:${THEME.bg}; font-family:Poppins;">
+      <div style="display:flex; align-items:center; font-size:30px; font-weight:700; color:${THEME.ink}; margin-bottom:28px;">🎓 Budget Scorecard</div>
+      <div style="display:flex; flex-direction:column;">${rows}</div>
+    </div>`;
+  return renderCard(html, { width: 860, height: 140 + budgets.length * 92 });
 }
 
-/* ─── 16. Year-in-review poster ────────────────────────────────────────── */
+/* ─── 16. Year-in-review poster (satori) ────────────────────────────────── */
 
-export function yearInReview({ year, totalExpenses, totalIncome, topCategory, biggestDay, txCount, currency = 'UZS' }) {
-  const cw = 900, ch = 1200;
-  const c = createCanvas(cw, ch);
-  const ctx = c.getContext('2d');
+export async function yearInReview({ year, totalExpenses, totalIncome, topCategory, biggestDay, txCount, currency = 'UZS' }) {
+  const net = totalIncome - totalExpenses;
+  const stat = (label, value, accent = THEME.ink) => `
+    <div style="display:flex; flex-direction:column; padding:24px 28px; margin-bottom:18px; border-radius:20px; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.12);">
+      <div style="display:flex; font-size:18px; color:rgba(255,255,255,0.7);">${esc(label)}</div>
+      <div style="display:flex; font-size:42px; font-weight:800; color:${accent}; margin-top:6px;">${value}</div>
+    </div>`;
 
-  const grad = ctx.createLinearGradient(0, 0, 0, ch);
-  grad.addColorStop(0, '#7c3aed'); grad.addColorStop(1, '#1e1b4b');
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, cw, ch);
-
-  ctx.fillStyle = '#fef3c7';
-  ctx.font = 'bold 60px sans-serif';
-  ctx.fillText(`${year} Wrapped`, 60, 100);
-
-  ctx.fillStyle = '#fbbf24';
-  ctx.font = '30px sans-serif';
-  ctx.fillText('Your year in money', 60, 150);
-
-  const row = (label, value, y) => {
-    ctx.fillStyle = '#cbd5e1';
-    ctx.font = '20px sans-serif';
-    ctx.fillText(label, 60, y);
-    ctx.fillStyle = '#f8fafc';
-    ctx.font = 'bold 40px sans-serif';
-    ctx.fillText(value, 60, y + 50);
-  };
-
-  row('You spent',         `${Math.round(totalExpenses).toLocaleString()} ${currency}`, 260);
-  row('You earned',        `${Math.round(totalIncome).toLocaleString()} ${currency}`,   400);
-  row('Net for the year',  `${Math.round(totalIncome - totalExpenses).toLocaleString()} ${currency}`, 540);
-  row('Top category',      topCategory || '—',                                          680);
-  row('Biggest day',       biggestDay || '—',                                            820);
-  row('Total transactions', String(txCount),                                            960);
-
-  ctx.fillStyle = 'rgba(255,255,255,0.6)';
-  ctx.font = '16px sans-serif';
-  ctx.fillText('FinanceTracker', 60, ch - 40);
-  return c.toBuffer('image/png');
+  const html = `
+    <div style="display:flex; flex-direction:column; width:100%; height:100%; padding:64px; background:${THEME.bgViolet}; font-family:Poppins;">
+      <div style="display:flex; font-size:72px; font-weight:800; color:${THEME.ink}; line-height:1;">${year}</div>
+      <div style="display:flex; font-size:40px; font-weight:700; color:#fcd34d; margin-top:4px;">Wrapped ✨</div>
+      <div style="display:flex; flex-direction:column; margin-top:40px;">
+        ${stat('You spent', `${compact(totalExpenses)} ${esc(currency)}`, '#fca5a5')}
+        ${stat('You earned', `${compact(totalIncome)} ${esc(currency)}`, '#86efac')}
+        ${stat('Net for the year', `${net >= 0 ? '+' : '−'}${compact(Math.abs(net))} ${esc(currency)}`, net >= 0 ? '#86efac' : '#fca5a5')}
+        ${stat('Top category', esc(topCategory || '—'))}
+        ${stat('Total transactions', String(txCount))}
+      </div>
+      <div style="display:flex; font-size:16px; color:rgba(255,255,255,0.55); margin-top:auto;">FinanceTracker</div>
+    </div>`;
+  return renderCard(html, { width: 880, height: 1180 });
 }
 
-/* ─── 17. Achievement badge ────────────────────────────────────────────── */
+/* ─── 17. Achievement badge (satori) ────────────────────────────────────── */
 
-export function badge({ title, subtitle, emoji = '🏆', color = '#fbbf24' }) {
-  const cw = 600, ch = 400;
-  const c = createCanvas(cw, ch);
-  const ctx = c.getContext('2d');
-  ctx.fillStyle = '#0f172a';
-  ctx.fillRect(0, 0, cw, ch);
-
-  // medallion
-  const cx = cw / 2, cy = 180;
-  const grd = ctx.createRadialGradient(cx, cy, 10, cx, cy, 120);
-  grd.addColorStop(0, '#ffffff'); grd.addColorStop(0.5, color); grd.addColorStop(1, '#78350f');
-  ctx.fillStyle = grd;
-  ctx.beginPath(); ctx.arc(cx, cy, 110, 0, Math.PI * 2); ctx.fill();
-
-  ctx.font = '90px sans-serif';
-  const m = ctx.measureText(emoji);
-  ctx.fillText(emoji, cx - m.width / 2, cy + 30);
-
-  ctx.fillStyle = '#fef3c7';
-  ctx.font = 'bold 32px sans-serif';
-  const t = ctx.measureText(title);
-  ctx.fillText(title, cx - t.width / 2, 340);
-
-  ctx.fillStyle = '#cbd5e1';
-  ctx.font = '18px sans-serif';
-  const s = ctx.measureText(subtitle);
-  ctx.fillText(subtitle, cx - s.width / 2, 370);
-
-  return c.toBuffer('image/png');
+export async function badge({ title, subtitle, emoji = '🏆', color = '#fbbf24' }) {
+  const html = `
+    <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; width:100%; height:100%; padding:48px; background:${THEME.bg}; font-family:Poppins;">
+      <div style="display:flex; align-items:center; justify-content:center; width:200px; height:200px; border-radius:100px; background:radial-gradient(circle at 50% 35%, #ffffff 0%, ${color} 48%, #78350f 100%); box-shadow:0 18px 50px rgba(0,0,0,0.45);">
+        <div style="display:flex; font-size:96px;">${emoji}</div>
+      </div>
+      <div style="display:flex; font-size:38px; font-weight:800; color:${THEME.ink}; margin-top:36px;">${esc(title)}</div>
+      <div style="display:flex; font-size:20px; color:${THEME.inkMuted}; margin-top:8px;">${esc(subtitle)}</div>
+    </div>`;
+  return renderCard(html, { width: 640, height: 480 });
 }
 
-/* ─── 18. Wallet card ───────────────────────────────────────────────────── */
+/* ─── 18. Wallet card (satori) ──────────────────────────────────────────── */
 
-export function walletCard({ name, balance, type, currency = 'UZS' }) {
-  const cw = 700, ch = 350;
-  const c = createCanvas(cw, ch);
-  const ctx = c.getContext('2d');
-
-  const grad = ctx.createLinearGradient(0, 0, cw, ch);
-  const palette = {
-    bank:    ['#3b82f6', '#1e40af'],
-    savings: ['#22c55e', '#15803d'],
-    cash:    ['#f59e0b', '#b45309'],
-    other:   ['#a78bfa', '#5b21b6'],
-  };
-  const [c1, c2] = palette[type] || palette.other;
-  grad.addColorStop(0, c1); grad.addColorStop(1, c2);
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, cw, ch);
-
-  // rounded corner mask is skipped for simplicity
-  ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 30px sans-serif';
-  ctx.fillText(name, 30, 60);
-  ctx.font = '20px sans-serif';
-  ctx.fillText(type.toUpperCase(), 30, 95);
-
-  ctx.font = 'bold 56px sans-serif';
-  ctx.fillText(`${Math.round(balance).toLocaleString()} ${currency}`, 30, 220);
-
-  ctx.font = '16px sans-serif';
-  ctx.fillStyle = 'rgba(255,255,255,0.7)';
-  ctx.fillText('FinanceTracker', 30, ch - 30);
-  return c.toBuffer('image/png');
+export async function walletCard({ name, balance, type, currency = 'UZS' }) {
+  const bg = THEME.wallet[type] || THEME.wallet.other;
+  const html = `
+    <div style="display:flex; flex-direction:column; justify-content:space-between; width:100%; height:100%; padding:48px; background:${bg}; font-family:Poppins;">
+      <div style="display:flex; align-items:flex-start; justify-content:space-between;">
+        <div style="display:flex; flex-direction:column;">
+          <div style="display:flex; font-size:34px; font-weight:700; color:#ffffff;">${esc(name)}</div>
+          <div style="display:flex; font-size:18px; font-weight:600; color:rgba(255,255,255,0.75); letter-spacing:2px; margin-top:4px;">${esc(String(type).toUpperCase())}</div>
+        </div>
+        <div style="display:flex; width:56px; height:42px; border-radius:8px; background:rgba(255,255,255,0.30);"></div>
+      </div>
+      <div style="display:flex; flex-direction:column;">
+        <div style="display:flex; font-size:18px; color:rgba(255,255,255,0.75);">Balance</div>
+        <div style="display:flex; align-items:flex-end; margin-top:4px;">
+          <div style="display:flex; font-size:64px; font-weight:800; color:#ffffff; line-height:1;">${Math.round(balance).toLocaleString()}</div>
+          <div style="display:flex; font-size:26px; font-weight:600; color:rgba(255,255,255,0.85); padding:0 0 8px 12px;">${esc(currency)}</div>
+        </div>
+      </div>
+      <div style="display:flex; font-size:16px; color:rgba(255,255,255,0.65);">FinanceTracker</div>
+    </div>`;
+  return renderCard(html, { width: 760, height: 460 });
 }

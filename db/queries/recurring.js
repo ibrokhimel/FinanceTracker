@@ -25,8 +25,10 @@ export function getRecurring(userId, status) {
   ).all(userId);
 }
 
+// Note: recurring_transactions has no updated_at column (see db/schema.js), so
+// these must not reference it — doing so previously made /recurring cancel throw.
 export function updateRecurringStatus(id, status) {
-  getDb().prepare("UPDATE recurring_transactions SET status = ?, updated_at = datetime('now') WHERE id = ?").run(status, id);
+  getDb().prepare('UPDATE recurring_transactions SET status = ? WHERE id = ?').run(status, id);
 }
 
 export function deleteRecurring(id) {
@@ -34,5 +36,5 @@ export function deleteRecurring(id) {
 }
 
 export function cancelRecurring(id) {
-  getDb().prepare("UPDATE recurring_transactions SET status = 'cancelled', updated_at = datetime('now') WHERE id = ?").run(id);
+  getDb().prepare("UPDATE recurring_transactions SET status = 'cancelled' WHERE id = ?").run(id);
 }

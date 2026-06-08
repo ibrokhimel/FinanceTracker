@@ -16,7 +16,7 @@ import { getCategories, findCategoryByName } from '../db/queries/categories.js';
 import { getBudgets } from '../db/queries/budgets.js';
 import { getUser } from '../db/queries/users.js';
 import { setSession, clearSession, FLOWS } from '../bot/session.js';
-import { expenseActions } from '../bot/keyboards.js';
+import { expenseActions, expenseConfirm } from '../bot/keyboards.js';
 import { detectCurrency, convert } from '../tools/currency.js';
 import { config } from '../tools/config.js';
 import { shouldWarn } from '../tools/regret.js';
@@ -62,8 +62,20 @@ export async function handleAddExpense(bot, msg) {
   }
 }
 
+// Short greetings / acknowledgements that shouldn't burn an AI call.
+const TRIVIAL = new Set(['hi','hey','hello','yo','ok','okay','k','thanks','thank you','ty','thx','yes','no','y','n','lol','haha','cool','nice','great','👍','🙏','😂','❤️']);
+function isTrivial(text) {
+  const t = text.trim().toLowerCase();
+  if (t.length < 2) return true;
+  if (TRIVIAL.has(t)) return true;
+  // emoji / punctuation only
+  if (!/[a-z0-9]/i.test(t)) return true;
+  return false;
+}
+
 /**
- * Handle plain text that looks like a financial entry.
+ * Handle plain text: try to log it as an expense/income; otherwise treat it as a
+ * question for the AI assistant (default on, toggle with `/settings chat off`).
  */
 export async function handleTextMessage(bot, msg) {
   const chatId = msg.chat.id;
@@ -73,7 +85,15 @@ export async function handleTextMessage(bot, msg) {
   try {
     const text = msg.text.trim();
     const parsed = parseQuick(text);
-    if (parsed.needsClarification || !parsed.amount || parsed.amount <= 0) return;
+    if (parsed.needsClarification || !parsed.amount || parsed.amount <= 0) {
+      // Not an expense — fall through to the AI assistant by default.
+      const user = getUser(userId);
+      if (user?.ai_chat === 0) return;          // user opted out of chat
+      if (isTrivial(text)) return;              // skip greetings/acks
+      const { answerFinanceQuestion } = await import('./ask.js');
+      await answerFinanceQuestion(bot, msg, text);
+      return;
+    }
 
     // Confidence gate — below threshold, confirm with user first
     const THRESHOLD = 60;
@@ -82,8 +102,8 @@ export async function handleTextMessage(bot, msg) {
       setSession(msg.from.id, { flow: FLOWS.AWAITING_EXPENSE_CONFIRMATION, partial, userId });
       const note = parsed.note || parsed.category || 'this';
       return bot.sendMessage(chatId,
-        `Got *${formatAmount(parsed.amount)}* for *${parsed.category || 'Uncategorized'}* (${parsed.emoji || '📌'}) — ${note}?\nConfidence ${parsed.confidence}%. Reply *yes* to confirm, or *category/amount/date <value>* to change.`,
-        { parse_mode: 'Markdown' }
+        `Got *${formatAmount(parsed.amount)}* for *${parsed.category || 'Uncategorized'}* (${parsed.emoji || '📌'}) — ${note}?\nConfidence ${parsed.confidence}%. Tap *Save*, or type *category/amount/date <value>* to change.`,
+        { parse_mode: 'Markdown', ...expenseConfirm() }
       );
     }
 
@@ -168,8 +188,8 @@ export async function handleDateReply(bot, msg, session) {
     setSession(msg.from.id, { flow: FLOWS.AWAITING_EXPENSE_CONFIRMATION, partial: session.partial, userId });
 
     await bot.sendMessage(chatId,
-      `Does this look right?\n\n${catEmoji} *${session.partial.category || 'Uncategorized'}*\n💸 ${formatAmount(session.partial.amount)}\n📝 ${noteText}\n📅 ${resolved}\n\nReply *yes* to confirm, or *category/amount/date <value>* to change just that field.`,
-      { parse_mode: 'Markdown' }
+      `Does this look right?\n\n${catEmoji} *${session.partial.category || 'Uncategorized'}*\n💸 ${formatAmount(session.partial.amount)}\n📝 ${noteText}\n📅 ${resolved}\n\nTap *Save*, or type *category/amount/date <value>* to change just that field.`,
+      { parse_mode: 'Markdown', ...expenseConfirm() }
     );
   } catch (err) {
     console.error('[expenses] date reply error:', err.message);
@@ -333,7 +353,7 @@ async function saveAndConfirm(bot, chatId, userId, parsed) {
     const { badge } = await import('../tools/charts.js');
     const earned = evaluate(userId);
     for (const a of earned) {
-      const buf = badge({ title: a.title, subtitle: a.subtitle, emoji: a.emoji });
+      const buf = await badge({ title: a.title, subtitle: a.subtitle, emoji: a.emoji });
       await bot.sendPhoto(chatId, buf, { caption: `🏆 *Achievement unlocked!* ${a.title}`, parse_mode: 'Markdown' });
     }
   } catch (err) {

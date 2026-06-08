@@ -260,6 +260,16 @@ export const MIGRATIONS = [
       db.prepare("UPDATE users SET access_status = 'approved' WHERE id > 0 AND (access_status IS NULL OR access_status = 'pending')").run();
     },
   },
+  {
+    version: 12,
+    name: 'ai_chat_default_pref',
+    up: (db) => {
+      const cols = db.prepare("PRAGMA table_info(users)").all().map(c => c.name);
+      // When ON, plain (non-expense) messages are answered by the AI assistant
+      // instead of being silently dropped. /ask still works explicitly.
+      if (!cols.includes('ai_chat')) db.exec('ALTER TABLE users ADD COLUMN ai_chat INTEGER DEFAULT 1;');
+    },
+  },
 ];
 
 /* ─── Runner ─────────────────────────────────────────────────────────────── */

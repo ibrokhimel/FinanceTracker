@@ -35,12 +35,15 @@ export async function handleListExpenses(bot, msg) {
       if (e.note && e.note !== e.cat_name) text += ` (${e.note})`;
       text += `\n   📅 ${e.date}\n\n`;
     }
-    text += `Use \`/edit <id> <field> <value>\` or \`/delete <id>\``;
+    text += `Tap 🗑️ to delete, or \`/edit <id> <field> <value>\` to change one.`;
 
-    const { pagination } = await import('../bot/keyboards.js');
+    const { pagination, expenseListActions } = await import('../bot/keyboards.js');
     const hasNext = expenses.length === Math.min(limit, 50);
-    const kb = pagination('exp:p', 0, hasNext, false);
-    await bot.sendMessage(chatId, text, { parse_mode: 'Markdown', ...kb });
+    const rows = [
+      ...expenseListActions(expenses).reply_markup.inline_keyboard,
+      ...pagination('exp:p', 0, hasNext, false).reply_markup.inline_keyboard,
+    ];
+    await bot.sendMessage(chatId, text, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: rows } });
   } catch (err) {
     console.error('[edit] list error:', err.message);
     await bot.sendMessage(chatId, '❌ Could not load expenses.');

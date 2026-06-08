@@ -16,11 +16,9 @@ export function addExpense({ user_id, amount, category_id, note, date, type, tag
     db.prepare("UPDATE wallets SET balance = balance + ?, updated_at = datetime('now') WHERE id = ?").run(delta, wallet_id);
   }
 
-  if (type === 'expense') {
-    const month = (date || new Date().toISOString().slice(0, 7)).slice(0, 7);
-    db.prepare("UPDATE budgets SET spent = spent + ? WHERE user_id = ? AND month = ? AND (category_id = ? OR category_id IS NULL)")
-      .run(amount, user_id, month, category_id);
-  }
+  // Note: budget `spent` is no longer maintained as a counter here — it's computed
+  // live from this table by getBudgets()/getBudgetAlerts(), so deletes and edits
+  // stay accurate. (See db/queries/budgets.js.)
 
   return db.prepare('SELECT * FROM expenses WHERE id = ?').get(info.lastInsertRowid);
 }

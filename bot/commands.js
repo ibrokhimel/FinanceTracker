@@ -49,7 +49,7 @@ export const COMMANDS = [
   { command: 'buddy',         description: '🤝 Accountability buddy' },
 
   // AI conversation
-  { command: 'ask',           description: '💬 Ask the AI about your finances' },
+  { command: 'ask',           description: '💬 Ask the AI (or just type a question)' },
 
   // Account
   { command: 'whoami',        description: '🪪 Your status / role / Telegram ID' },

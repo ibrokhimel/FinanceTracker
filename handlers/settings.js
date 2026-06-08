@@ -2,10 +2,73 @@
  * Settings handler — /start, /settings, /help commands.
  */
 
-import { updateUser } from '../db/queries/users.js';
+import { updateUser, getUser } from '../db/queries/users.js';
+import { usage } from '../tools/commandHelp.js';
 import { buildWelcome } from '../tools/reportBuilder.js';
 import { consumeInvite, setAccess, isApproved } from '../db/queries/access.js';
+import { settingsMenu, currencyPicker, themePicker, nudgePicker } from '../bot/keyboards.js';
 import { getDb } from '../db/database.js';
+
+/** Settings overview text (shared by /settings and the inline menu). */
+function settingsText(user) {
+  let text = `⚙️ *Your Settings*\n\n`;
+  text += `👤 Name: ${user.first_name}\n`;
+  text += `💵 Currency: ${user.currency}\n`;
+  text += `🌐 Language: ${user.language}\n`;
+  text += `📅 Month starts: Day ${user.month_start_day}\n`;
+  text += `⏰ Daily nudge: ${user.daily_nudge ? `Yes at ${user.nudge_time}` : 'Off'}\n`;
+  text += `📊 Weekly digest: ${user.weekly_digest ? 'On' : 'Off'}\n`;
+  text += `💬 AI chat (free text): ${user.ai_chat === 0 ? 'Off' : 'On'}\n\n`;
+  text += `Tap below to change anything — or type \`/settings\` for text commands.`;
+  return text;
+}
+
+/**
+ * Inline-keyboard callbacks for settings (namespace `set`).
+ * Edits the message in place so the panel feels like a real menu.
+ */
+export async function handleSettingsCallback(bot, query, action, args) {
+  const chatId = query.message?.chat?.id;
+  const msgId  = query.message?.message_id;
+  const userId = query.user?.id;
+  if (!userId) return;
+
+  const edit = (text, kb) => bot.editMessageText(text, {
+    chat_id: chatId, message_id: msgId, parse_mode: 'Markdown',
+    reply_markup: kb.reply_markup,
+  }).catch(() => {});
+
+  const showMenu = () => { const u = getUser(userId); return edit(settingsText(u), settingsMenu(u)); };
+
+  switch (action) {
+    case 'menu':  return showMenu();
+    case 'cur':
+      if (args[0]) { updateUser(userId, { currency: args[0] }); return showMenu(); }
+      return edit('💱 *Pick your currency:*', currencyPicker());
+    case 'theme':
+      if (args[0]) { updateUser(userId, { theme: args[0] }); return showMenu(); }
+      return edit('🎨 *Pick a theme:*', themePicker());
+    case 'nudgemenu':
+      return edit('⏰ *Daily nudge time:*', nudgePicker());
+    case 'nudge':
+      if (args[0] === 'off') updateUser(userId, { daily_nudge: 0 });
+      else if (/^\d{4}$/.test(args[0])) updateUser(userId, { daily_nudge: 1, nudge_time: `${args[0].slice(0,2)}:${args[0].slice(2)}` });
+      return showMenu();
+    case 'toggle': {
+      const u = getUser(userId);
+      const map = {
+        chat:    ['ai_chat',         u.ai_chat === 0 ? 1 : 0],
+        digest:  ['weekly_digest',   u.weekly_digest ? 0 : 1],
+        debrief: ['debrief_enabled', u.debrief_enabled ? 0 : 1],
+        ai:      ['ai_enabled',      u.ai_enabled ? 0 : 1],
+      };
+      const m = map[args[0]];
+      if (m) updateUser(userId, { [m[0]]: m[1] });
+      return showMenu();
+    }
+    default: return showMenu();
+  }
+}
 
 /**
  * /start — welcome message and onboarding.
@@ -53,20 +116,7 @@ export async function handleSettings(bot, msg) {
   const args = msg.text.split(' ').slice(1);
 
   if (args.length === 0) {
-    let text = `⚙️ *Your Settings*\n\n`;
-    text += `👤 Name: ${user.first_name}\n`;
-    text += `💵 Currency: ${user.currency}\n`;
-    text += `🌐 Language: ${user.language}\n`;
-    text += `📅 Month starts: Day ${user.month_start_day}\n`;
-    text += `⏰ Daily nudge: ${user.daily_nudge ? `Yes at ${user.nudge_time}` : 'Off'}\n`;
-    text += `📊 Weekly digest: ${user.weekly_digest ? 'On' : 'Off'}\n\n`;
-    text += `*Change settings:*\n`;
-    text += `/settings currency USD\n`;
-    text += `/settings nudge 21:00\n`;
-    text += `/settings nudge off\n`;
-    text += `/settings digest on/off\n`;
-    text += `/settings monthday 15\n`;
-    return bot.sendMessage(chatId, text, { parse_mode: 'Markdown' });
+    return bot.sendMessage(chatId, settingsText(user), { parse_mode: 'Markdown', ...settingsMenu(user) });
   }
 
   const key = args[0].toLowerCase();
@@ -123,6 +173,15 @@ export async function handleSettings(bot, msg) {
       await bot.sendMessage(chatId, `🤖 AI parser ${on ? 'enabled' : 'disabled'}.`);
       break;
     }
+    case 'chat': {
+      const on = ['on','1','true','yes'].includes(value.toLowerCase());
+      updateUser(user.id, { ai_chat: on ? 1 : 0 });
+      await bot.sendMessage(chatId,
+        on ? `💬 AI chat on — just type a question any time, no \`/ask\` needed.`
+           : `💬 AI chat off — plain messages won't be sent to the AI. Use \`/ask\` explicitly.`,
+        { parse_mode: 'Markdown' });
+      break;
+    }
     case 'debrief': {
       const on = ['on','1','true','yes'].includes(value.toLowerCase());
       updateUser(user.id, { debrief_enabled: on ? 1 : 0 });
@@ -141,7 +200,14 @@ export async function handleSettings(bot, msg) {
       break;
     }
     default:
-      await bot.sendMessage(chatId, `❌ Unknown setting "${key}". Use /settings to see options.`);
+      await bot.sendMessage(chatId, usage(`Unknown setting "${key}"`, [
+        '/settings currency USD',
+        '/settings chat on/off',
+        '/settings nudge 21:00',
+        '/settings digest on/off',
+        '/settings theme dark',
+        '/settings monthday 15',
+      ], 'Send /settings to see your current values.'), { parse_mode: 'Markdown' });
   }
 }
 
@@ -197,7 +263,9 @@ export async function handleHelp(bot, msg) {
 /buddy — 🤝 Accountability buddy (privacy-preserving)
 
 ━━━ *Talk to the AI* ━━━
-/ask \`<question>\` — Chat with the AI about your money
+💬 _Just type a question_ — e.g. \`how much did I spend on food?\` (no command needed)
+/ask \`<question>\` — Same thing, explicitly
+/settings chat \`on/off\` — Toggle free-text AI replies
 /usage — Your rate-limit + token usage
 
 ━━━ *Account & Invites* ━━━

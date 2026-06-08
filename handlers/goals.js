@@ -5,6 +5,7 @@
 import { createGoal, getGoals, updateGoalProgress } from '../db/queries/goals.js';
 import { formatAmount } from '../tools/formatter.js';
 import { progressBar } from '../tools/formatter.js';
+import { goalsActions } from '../bot/keyboards.js';
 
 /**
  * /goals [new "Name" amount | add amount]
@@ -77,8 +78,8 @@ async function showGoals(bot, chatId, userId) {
   let text = '🎯 *Savings Goals*\n\n';
 
   if (!active.length && !completed.length) {
-    text += 'No goals yet. Create one:\n`/goals new "Emergency Fund" 500000`\n`/goals add 10000`';
-    return bot.sendMessage(chatId, text, { parse_mode: 'Markdown' });
+    text += 'No goals yet — tap below to create one.';
+    return bot.sendMessage(chatId, text, { parse_mode: 'Markdown', ...goalsActions([]) });
   }
 
   if (active.length) {
@@ -98,7 +99,7 @@ async function showGoals(bot, chatId, userId) {
     }
   }
 
-  await bot.sendMessage(chatId, text, { parse_mode: 'Markdown' });
+  await bot.sendMessage(chatId, text, { parse_mode: 'Markdown', ...goalsActions(active) });
 }
 
 function getMotivation(pct) {

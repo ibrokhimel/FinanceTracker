@@ -19,6 +19,7 @@
   "license": "ISC",
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
+    "@resvg/resvg-js": "^2.6.2",
     "better-sqlite3": "^12.10.0",
     "canvas": "^3.2.3",
     "chart.js": "^4.5.1",
@@ -28,6 +29,8 @@
     "node-cron": "^4.2.1",
     "node-telegram-bot-api": "^0.67.0",
     "pdfkit": "^0.18.0",
+    "satori": "^0.26.0",
+    "satori-html": "^0.3.2",
     "vitest": "^4.1.8"
   }
 }

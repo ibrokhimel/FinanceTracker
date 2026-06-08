@@ -9,6 +9,7 @@
 
 import { getDb } from '../db/database.js';
 import { formatAmount } from '../tools/formatter.js';
+import { usage } from '../tools/commandHelp.js';
 
 function projectMonthlySavings(monthlyAvg, deltaArg) {
   const m = deltaArg.match(/^-?(\d+(?:\.\d+)?)\s*%$/);
@@ -53,7 +54,13 @@ export async function handleWhatIf(bot, msg) {
   if (!avg) return bot.sendMessage(chatId, `No spending on "${cat}" found.`);
 
   const monthly = projectMonthlySavings(avg, delta);
-  if (monthly == null) return bot.sendMessage(chatId, `Couldn't parse delta "${delta}". Try \`0\`, \`-50%\`, or a fixed amount.`);
+  if (monthly == null) {
+    return bot.sendMessage(chatId, usage(`Couldn't read the change "${delta}"`, [
+      `/whatif ${cat} 0`,
+      `/whatif ${cat} -50%`,
+      `/whatif ${cat} 100000`,
+    ], '`0` = cut it entirely · `-50%` = halve it · a number = new monthly amount.'), { parse_mode: 'Markdown' });
+  }
 
   const y1 = monthly * 12;
   const y3 = y1 * 3;

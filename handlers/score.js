@@ -83,7 +83,7 @@ export async function handleScore(bot, msg) {
   const grade = score >= 85 ? 'A' : score >= 70 ? 'B' : score >= 55 ? 'C' : score >= 40 ? 'D' : 'F';
 
   try {
-    const buf = scoreCard({ score, subscores: subs });
+    const buf = await scoreCard({ score, subscores: subs });
     await bot.sendPhoto(chatId, buf, {
       caption: `*Financial Health Score:* ${score} (${grade})\n` +
                Object.entries(subs).map(([k, v]) => `• ${k}: ${v}`).join('\n'),

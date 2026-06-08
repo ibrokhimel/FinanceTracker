@@ -4,6 +4,7 @@
 
 import { createSubscription, getSubscriptions, updateSubscriptionStatus } from '../db/queries/subscriptions.js';
 import { formatAmount } from '../tools/formatter.js';
+import { subsActions } from '../bot/keyboards.js';
 
 /**
  * /subscriptions [add|cancel|pause] [name] [amount|cycle]
@@ -74,8 +75,8 @@ async function showSubs(bot, chatId, userId) {
   let text = '🔄 *Subscriptions*\n\n';
 
   if (!active.length && !paused.length && !cancelled.length) {
-    text += 'None tracked.\n\nAdd one:\n`/subscriptions add Netflix 1500`\n`/subscriptions add Spotify 1000 yearly`';
-    return bot.sendMessage(chatId, text, { parse_mode: 'Markdown' });
+    text += 'None tracked — tap below to add one.';
+    return bot.sendMessage(chatId, text, { parse_mode: 'Markdown', ...subsActions([], []) });
   }
 
   if (active.length) {
@@ -102,7 +103,7 @@ async function showSubs(bot, chatId, userId) {
     for (const s of cancelled.slice(0, 3)) text += `🗑️ ${s.name}\n`;
   }
 
-  await bot.sendMessage(chatId, text, { parse_mode: 'Markdown' });
+  await bot.sendMessage(chatId, text, { parse_mode: 'Markdown', ...subsActions(active, paused) });
 }
 
 function getNextDate(cycle) {

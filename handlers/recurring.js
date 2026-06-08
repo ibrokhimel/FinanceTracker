@@ -5,6 +5,7 @@
 import { createRecurring, getRecurring, cancelRecurring } from '../db/queries/recurring.js';
 import { getCategories, findCategoryByName } from '../db/queries/categories.js';
 import { formatAmount } from '../tools/formatter.js';
+import { recurringActions } from '../bot/keyboards.js';
 
 const FREQ_MAP = {
   daily: 'daily', weekly: 'weekly', monthly: 'monthly', yearly: 'yearly',
@@ -119,8 +120,8 @@ async function showRecurring(bot, chatId, userId) {
   let text = '🔄 *Recurring Transactions*\n\n';
 
   if (!active.length && !cancelled.length) {
-    text += 'None set up.\n\nAdd one:\n`/recurring add "Netflix" 15000 monthly`\n`/recurring add "Gym" 50000 monthly`';
-    return bot.sendMessage(chatId, text, { parse_mode: 'Markdown' });
+    text += 'None set up — tap below to add one.';
+    return bot.sendMessage(chatId, text, { parse_mode: 'Markdown', ...recurringActions([]) });
   }
 
   if (active.length) {
@@ -144,8 +145,7 @@ async function showRecurring(bot, chatId, userId) {
     text += '\n';
   }
 
-  text += `💡 Use \`/recurring cancel <id>\` to remove.`;
-  await bot.sendMessage(chatId, text, { parse_mode: 'Markdown' });
+  await bot.sendMessage(chatId, text, { parse_mode: 'Markdown', ...recurringActions(active) });
 }
 
 /* ─── helpers ─── */

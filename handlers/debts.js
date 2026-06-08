@@ -4,6 +4,7 @@
 
 import { createDebt, getDebts, repayDebt } from '../db/queries/debts.js';
 import { formatAmount } from '../tools/formatter.js';
+import { debtsActions } from '../bot/keyboards.js';
 
 /**
  * /debts [lent|borrowed|repay] [person] [amount]
@@ -63,8 +64,8 @@ async function showDebts(bot, chatId, userId) {
 
   let text = '📋 *Debts Tracker*\n\n';
   if (!lent.length && !borrowed.length) {
-    text += 'No debts recorded.\n\n`/debts lent Ahmed 50000`\n`/debts borrowed Sara 30000`';
-    return bot.sendMessage(chatId, text, { parse_mode: 'Markdown' });
+    text += 'No debts recorded — tap below to add one.';
+    return bot.sendMessage(chatId, text, { parse_mode: 'Markdown', ...debtsActions([]) });
   }
 
   if (lent.length) {
@@ -91,7 +92,7 @@ async function showDebts(bot, chatId, userId) {
     text += `Total owed: ${formatAmount(total)}\n`;
   }
 
-  await bot.sendMessage(chatId, text, { parse_mode: 'Markdown' });
+  await bot.sendMessage(chatId, text, { parse_mode: 'Markdown', ...debtsActions([...lent, ...borrowed]) });
 }
 
 function parseAmount(str) {

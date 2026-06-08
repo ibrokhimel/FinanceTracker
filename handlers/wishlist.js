@@ -5,6 +5,7 @@
 
 import { createWishlistItem, getWishlist, updateWishlistStatus, deleteWishlistItem, getWishlistStats } from '../db/queries/wishlist.js';
 import { formatAmount } from '../tools/formatter.js';
+import { wishlistActions } from '../bot/keyboards.js';
 
 /**
  * /wishlist [add|buy|remove] [args...]
@@ -114,8 +115,8 @@ async function showWishlist(bot, chatId, userId) {
   let text = '⭐ *My Wishlist*\n\n';
 
   if (!items.length) {
-    text += 'Nothing on your wishlist yet!\n\nAdd something:\n`/wishlist add "MacBook" 2500000`\n`/wishlist add "Camera" 5000000 high`';
-    return bot.sendMessage(chatId, text, { parse_mode: 'Markdown' });
+    text += 'Nothing on your wishlist yet — tap below to add something.';
+    return bot.sendMessage(chatId, text, { parse_mode: 'Markdown', ...wishlistActions([]) });
   }
 
   for (const item of items) {
@@ -129,9 +130,7 @@ async function showWishlist(bot, chatId, userId) {
 
   text += `📊 *Total:* ${formatAmount(stats.totalPrice)} across ${stats.wishlisted} items`;
   if (stats.purchased > 0) text += `\n🎉 *Purchased:* ${stats.purchased} items (${formatAmount(stats.spent)})`;
-  text += `\n\n💡 \`/wishlist add "Name" price\` \`/wishlist buy <id>\` \`/wishlist remove <id>\``;
-
-  await bot.sendMessage(chatId, text, { parse_mode: 'Markdown' });
+  await bot.sendMessage(chatId, text, { parse_mode: 'Markdown', ...wishlistActions(items) });
 }
 
 function priorityEmoji(p) {

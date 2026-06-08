@@ -228,6 +228,27 @@ export function registerRoutes(bot, handlers) {
           });
           return;
         }
+        // Button-initiated flows (handlers/flows.js)
+        case 'awaiting_wallet_name':
+        case 'awaiting_transfer_amount':
+        case 'awaiting_goal_name':
+        case 'awaiting_goal_amount':
+        case 'awaiting_debt_name':
+        case 'awaiting_debt_amount': {
+          const fnByFlow = {
+            awaiting_wallet_name:     'handleWalletNameReply',
+            awaiting_transfer_amount: 'handleTransferAmountReply',
+            awaiting_goal_name:       'handleGoalNameReply',
+            awaiting_goal_amount:     'handleGoalAmountReply',
+            awaiting_debt_name:       'handleDebtNameReply',
+            awaiting_debt_amount:     'handleDebtAmountReply',
+          };
+          const fn = fnByFlow[session.flow];
+          import('../handlers/flows.js').then(async (flows) => {
+            await flows[fn](bot, msg, session);
+          }).catch(err => console.error('[router] flow error:', err.message));
+          return;
+        }
         default:
           // Unknown flow — clear and fall through to text handler
           clearSession(userId);

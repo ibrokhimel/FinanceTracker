@@ -49,7 +49,7 @@ export async function handleChart(bot, msg) {
       case 'heatmap': {
         const oneYearAgo = new Date(Date.now() - 365 * 86400000).toISOString().slice(0, 10);
         const daily = getDailyTotals(userId, oneYearAgo, today);
-        const buf = charts.heatmapCalendar(daily);
+        const buf = await charts.heatmapCalendar(daily);
         return bot.sendPhoto(chatId, buf, { caption: '🔥 *365-day spending heatmap*', parse_mode: 'Markdown' });
       }
 
@@ -87,7 +87,7 @@ export async function handleChart(bot, msg) {
           const h = new Date(e.created_at.replace(' ', 'T') + 'Z').getHours();
           hours[h] += e.amount;
         }
-        const buf = charts.hourClock(hours);
+        const buf = await charts.hourClock(hours);
         return bot.sendPhoto(chatId, buf, { caption: '🕐 *Hour-of-day pattern*', parse_mode: 'Markdown' });
       }
 
@@ -95,7 +95,7 @@ export async function handleChart(bot, msg) {
         const goals = getGoals(userId);
         if (!goals.length) return bot.sendMessage(chatId, 'No goals yet — /goals to create one.');
         for (const g of goals.slice(0, 3)) {
-          const buf = charts.goalCard({
+          const buf = await charts.goalCard({
             name: g.name, current: g.current_amount, target: g.target_amount, deadline: g.deadline,
           });
           await bot.sendPhoto(chatId, buf);
@@ -108,7 +108,7 @@ export async function handleChart(bot, msg) {
         const ws = getWallets(userId);
         if (!ws.length) return bot.sendMessage(chatId, 'No wallets yet — /wallets to create one.');
         for (const w of ws) {
-          const buf = charts.walletCard({ name: w.name, balance: w.balance, type: w.type });
+          const buf = await charts.walletCard({ name: w.name, balance: w.balance, type: w.type });
           await bot.sendPhoto(chatId, buf);
         }
         return;
@@ -134,13 +134,13 @@ export async function handleChart(bot, msg) {
         const incomes = sum.byIncomeCategory.slice(0, 5).map(c => ({ name: c.name, amount: c.total }));
         const expenses = sum.byCategory.slice(0, 5).map(c => ({ name: c.name, amount: c.total }));
         const closing = opening + sum.total_income - sum.total_expenses;
-        const buf = charts.cashFlowWaterfall({ opening, incomes, expenses, closing });
+        const buf = await charts.cashFlowWaterfall({ opening, incomes, expenses, closing });
         return bot.sendPhoto(chatId, buf, { caption: '💧 *Cash flow waterfall*', parse_mode: 'Markdown' });
       }
 
       case 'dna': {
         const exps = getExpenses(userId, { fromDate: new Date(Date.now() - 60*86400000).toISOString().slice(0,10), toDate: today, limit: 120 });
-        const buf = charts.spendingDNA(exps);
+        const buf = await charts.spendingDNA(exps);
         return bot.sendPhoto(chatId, buf, { caption: '🧬 *Your spending DNA (last 60d)*', parse_mode: 'Markdown' });
       }
 
@@ -177,7 +177,7 @@ export async function handleChart(bot, msg) {
       case 'debtrace': {
         const ds = getDebts(userId);
         if (!ds.length) return bot.sendMessage(chatId, 'No active debts 🎉');
-        const buf = charts.debtRaceTrack(ds);
+        const buf = await charts.debtRaceTrack(ds);
         return bot.sendPhoto(chatId, buf, { caption: '🏁 *Debt race*', parse_mode: 'Markdown' });
       }
 
@@ -187,7 +187,7 @@ export async function handleChart(bot, msg) {
           name: b.cat_name || 'Overall', emoji: b.cat_emoji || '📌', amount: b.amount, spent: b.spent,
         }));
         if (!bs.length) return bot.sendMessage(chatId, 'No budgets set. /budget wizard');
-        const buf = charts.budgetGradeCard(bs);
+        const buf = await charts.budgetGradeCard(bs);
         return bot.sendPhoto(chatId, buf, { caption: '🎓 *Budget scorecard*', parse_mode: 'Markdown' });
       }
 
@@ -197,7 +197,7 @@ export async function handleChart(bot, msg) {
         const sum = getSpendingSummary(userId, `${year}-01-01`, `${year}-12-31`);
         const daily = getDailyTotals(userId, `${year}-01-01`, `${year}-12-31`);
         const biggest = daily.sort((a,b) => b.total - a.total)[0];
-        const buf = charts.yearInReview({
+        const buf = await charts.yearInReview({
           year,
           totalExpenses: sum.total_expenses,
           totalIncome:   sum.total_income,
@@ -218,7 +218,7 @@ export async function handleChart(bot, msg) {
           payback: { title: 'Debt Slayer',     subtitle: 'paid off a debt in full',  emoji: '⚔️', color: '#f87171' },
         };
         const cfg = map[kind] || map.streak;
-        const buf = charts.badge(cfg);
+        const buf = await charts.badge(cfg);
         return bot.sendPhoto(chatId, buf);
       }
 

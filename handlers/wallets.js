@@ -4,6 +4,7 @@
 
 import { getWallets, createWallet, transferBetweenWallets } from '../db/queries/wallets.js';
 import { formatAmount } from '../tools/formatter.js';
+import { walletsActions } from '../bot/keyboards.js';
 
 const WALLET_ICONS = { cash: '💵', bank: '🏦', savings: '🐷', other: '💳' };
 
@@ -71,8 +72,8 @@ async function showWallets(bot, chatId, userId) {
   const wallets = getWallets(userId);
   if (!wallets.length) {
     return bot.sendMessage(chatId,
-      `💳 *Wallets*\n\nNo wallets yet. Create one:\n\`/wallets new "Bank" bank\`\n\`/wallets new Cash cash\``,
-      { parse_mode: 'Markdown' }
+      `💳 *Wallets*\n\nNo wallets yet — tap below to create one.`,
+      { parse_mode: 'Markdown', ...walletsActions() }
     );
   }
 
@@ -85,7 +86,7 @@ async function showWallets(bot, chatId, userId) {
   }
 
   text += `\n━━━━━━━━━━━━━━\n💵 *Total:* ${formatAmount(total)}`;
-  await bot.sendMessage(chatId, text, { parse_mode: 'Markdown' });
+  await bot.sendMessage(chatId, text, { parse_mode: 'Markdown', ...walletsActions() });
 }
 
 function parseAmount(str) {

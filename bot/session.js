@@ -114,5 +114,6 @@ export const FLOWS = {
   AWAITING_DEBT_NAME: 'awaiting_debt_name',
   AWAITING_DEBT_AMOUNT: 'awaiting_debt_amount',
   AWAITING_WALLET_NAME: 'awaiting_wallet_name',
+  AWAITING_TRANSFER_AMOUNT: 'awaiting_transfer_amount',
   AWAITING_DELETE_CONFIRMATION: 'awaiting_delete_confirmation',
 };

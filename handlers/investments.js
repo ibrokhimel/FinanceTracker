@@ -5,6 +5,7 @@
 
 import { addInvestment, getInvestments, deleteInvestment } from '../db/queries/investments.js';
 import { formatAmount } from '../tools/formatter.js';
+import { investmentsActions } from '../bot/keyboards.js';
 
 async function fetchStockPrice(symbol) {
   try {
@@ -59,7 +60,7 @@ export async function handleInvestments(bot, msg) {
   if (!list.length) {
     return bot.sendMessage(chatId,
       `📈 *No investments yet.*\n\nAdd with:\n\`/investments add AAPL 10 175 stock\`\n\`/investments add bitcoin 0.05 60000 crypto\``,
-      { parse_mode: 'Markdown' });
+      { parse_mode: 'Markdown', ...investmentsActions([]) });
   }
 
   await bot.sendChatAction(chatId, 'typing');
@@ -84,5 +85,5 @@ export async function handleInvestments(bot, msg) {
   }
   const totalPl = totalValue - totalCost;
   txt += `\n*Total cost:* ${formatAmount(totalCost, 'USD')}\n*Current value:* ${formatAmount(totalValue, 'USD')}\n*P/L:* ${totalPl >= 0 ? '🟢' : '🔴'} ${formatAmount(totalPl, 'USD')}`;
-  await bot.sendMessage(chatId, txt, { parse_mode: 'Markdown' });
+  await bot.sendMessage(chatId, txt, { parse_mode: 'Markdown', ...investmentsActions(list) });
 }
