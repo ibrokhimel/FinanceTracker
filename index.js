@@ -48,6 +48,8 @@ import { handleInvite } from './handlers/invite.js';
 import { handleUsage } from './handlers/usage.js';
 import { handleAsk } from './handlers/ask.js';
 import { handleWhoami } from './handlers/whoami.js';
+import { handleChangelog } from './handlers/changelog.js';
+import { announceVersionIfChanged, VERSION } from './tools/version.js';
 import { initSmartReminders } from './tools/smartReminder.js';
 import { initFrictionSweeper } from './tools/friction.js';
 import { refreshRates } from './tools/currency.js';
@@ -123,6 +125,7 @@ registerRoutes(bot, {
   usage:          handleUsage,
   ask:            handleAsk,
   whoami:         handleWhoami,
+  changelog:      handleChangelog,
 
   // Inline keyboard callback handler
   callback: handleCallback,
@@ -142,7 +145,12 @@ if (process.env.HEALTH_PORT !== 'off') {
 // Kick off background currency refresh (non-blocking)
 refreshRates(['USD', 'UZS', 'EUR']).catch(() => {});
 
-log.info('FinanceBot running');
+log.info('FinanceBot running', { version: VERSION });
+
+// Announce a version bump to all approved users (once per new version)
+announceVersionIfChanged(bot).then((r) => {
+  if (r?.announced) log.info('version announced', { version: VERSION, notified: r.sent || 0 });
+}).catch(() => {});
 
 /* ─── Graceful shutdown ────────────────────────────────────────────────── */
 

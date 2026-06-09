@@ -309,6 +309,19 @@ export const MIGRATIONS = [
       if (!wCols.includes('aliases')) db.exec('ALTER TABLE wallets ADD COLUMN aliases TEXT;');
     },
   },
+  {
+    version: 14,
+    name: 'app_meta',
+    up: (db) => {
+      // Generic key/value store. Used for 'announced_version' (version tracking).
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS app_meta (
+          key   TEXT PRIMARY KEY,
+          value TEXT
+        );
+      `);
+    },
+  },
 ];
 
 /* ─── Runner ─────────────────────────────────────────────────────────────── */

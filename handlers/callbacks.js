@@ -29,6 +29,7 @@ import { handleChart } from './charts.js';
 import { handleInvestments } from './investments.js';
 import { handleConfirmReply } from './expenses.js';
 import { handlePhotoChoice, handleImportCommit, handleImportCancel, handleImportUndo } from './photo.js';
+import { handleChangelogHistory } from './changelog.js';
 
 import { getWallets, getWalletById, updateWalletType, transferBetweenWallets } from '../db/queries/wallets.js';
 import { getGoalById, setGoalStatus } from '../db/queries/goals.js';
@@ -248,6 +249,11 @@ export async function handleCallback(bot, query) {
         if (action === 'commit') return void await handleImportCommit(bot, query);
         if (action === 'cancel') return void await handleImportCancel(bot, query);
         if (action === 'undo')   return void await handleImportUndo(bot, query, args[0]);
+        return toast();
+
+      /* ── Changelog history ───────────────────────────────────────── */
+      case 'log':
+        await handleChangelogHistory(bot, query);
         return toast();
 
       /* ── Reports / menu / charts ─────────────────────────────────── */
