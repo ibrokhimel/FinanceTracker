@@ -8,7 +8,7 @@ const BUCKETS = new Map(); // key → { tokens, lastRefill }
 
 const LIMITS = {
   msg:   { max: 30,  refillPerSec: 30 / 60 },     // 30/min
-  photo: { max: 5,   refillPerSec: 5 / 60 },      // 5/min
+  photo: { max: 12,  refillPerSec: 12 / 60 },     // 12/min
   ai:    { max: 100, refillPerSec: 100 / 3600 },  // 100/hr
 };
 

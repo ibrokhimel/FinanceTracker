@@ -1,6 +1,6 @@
 {
   "name": "financetracker",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Telegram personal finance bot — track expenses, budgets, goals, and more via natural language",
   "main": "index.js",
   "type": "module",

@@ -13,9 +13,19 @@
  * Put the NEWEST entry first in CHANGELOG (index 0 = current release).
  */
 
-export const VERSION = '0.5.0';
+export const VERSION = '0.6.0';
 
 export const CHANGELOG = [
+  {
+    version: '0.6.0',
+    date: '2026-06-09',
+    title: 'Multi-screenshot import + real dates',
+    changes: [
+      '📸 Send several bank screenshots at once — no more "send slower"; they\'re queued and read one by one',
+      '🗓️ Imports now use each transaction\'s real date & time from the screenshot (resolving "Today"/"Yesterday"), not the import date',
+      '♻️ Rows repeated across overlapping screenshots are de-duplicated automatically',
+    ],
+  },
   {
     version: '0.5.0',
     date: '2026-06-09',

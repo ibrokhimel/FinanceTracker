@@ -172,7 +172,10 @@ export function registerRoutes(bot, handlers) {
 
   bot.on('photo', (msg) => {
     ensureUser(msg);
-    if (!rateLimit(msg.from.id, 'photo')) {
+    // Album photos (sent together, sharing a media_group_id) bypass the per-photo
+    // cap — they're only buffered here, not processed per message. Single photos
+    // keep a light cap. The AI cost is gated later by the 'ai' limit at read time.
+    if (!msg.media_group_id && !rateLimit(msg.from.id, 'photo')) {
       bot.sendMessage(msg.chat.id, '⏱️ Too many photos — give it a minute.').catch(() => {});
       return;
     }

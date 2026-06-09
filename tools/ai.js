@@ -340,7 +340,8 @@ Return ONLY JSON, no prose:
   "currency": "<ISO code or null>",
   "transactions": [
     {
-      "date": "YYYY-MM-DD or null",
+      "date": "YYYY-MM-DD",                      // the transaction's REAL date (see date rules)
+      "time": "HH:MM or null",                   // 24h clock if a time is shown
       "description": "<merchant / text shown>",
       "amount": <positive number>,
       "direction": "debit" | "credit",          // debit = money OUT, credit = money IN
@@ -353,8 +354,13 @@ Return ONLY JSON, no prose:
 Rules:
 - One object per visible transaction row. Read EVERY row you can see.
 - "amount" is ALWAYS positive; encode in/out via "direction".
+- DATES: today is {TODAY}. Resolve relative labels to a real date — "Today"→today,
+  "Yesterday"→yesterday, a weekday or "12 Jun" with no year → the most recent past
+  occurrence (use the current year, or last year if that would be in the future).
+  If a row sits under a date header, use that header's date. Always output YYYY-MM-DD.
+- "time": include the clock time if the row shows one, else null.
 - Money sent to/between the user's own cards ("transfer", "to card", "own account") → is_transfer true.
-- Use null for anything you can't read. If there are no transactions, return "transactions": [].`;
+- If there are no transactions, return "transactions": [].`;
 
 async function geminiVision(prompt, imageBuffer, mime) {
   const g = gemini();
@@ -410,9 +416,9 @@ async function openrouterVision(prompt, imageBuffer, mime) {
  * @returns {{ok:true, transactions:Array, currency:string|null, provider:string} | {ok:false, error:string}}
  */
 export async function readStatement(imageBuffer, mime = 'image/jpeg', accountsHint = '') {
-  const prompt = accountsHint
-    ? `${STATEMENT_PROMPT}\n\nThe user's known accounts: ${accountsHint}. Use these labels for "account"/"counterparty_account" when a row matches one.`
-    : STATEMENT_PROMPT;
+  const today = new Date().toISOString().slice(0, 10);
+  let prompt = STATEMENT_PROMPT.replace('{TODAY}', today);
+  if (accountsHint) prompt += `\n\nThe user's known accounts: ${accountsHint}. Use these labels for "account"/"counterparty_account" when a row matches one.`;
 
   const errors = [];
   for (const [name, fn] of [['gemini', geminiVision], ['openrouter', openrouterVision]]) {
@@ -420,7 +426,8 @@ export async function readStatement(imageBuffer, mime = 'image/jpeg', accountsHi
       const json = await fn(prompt, imageBuffer, mime);
       const txns = Array.isArray(json?.transactions) ? json.transactions : [];
       const normalized = txns.map(t => ({
-        date: t.date || null,
+        date: /^\d{4}-\d{2}-\d{2}$/.test(t.date) ? t.date : null,
+        time: /^\d{1,2}:\d{2}$/.test(t.time) ? t.time : null,
         description: String(t.description || '').slice(0, 120),
         amount: Math.abs(Number(t.amount) || 0),
         direction: t.direction === 'credit' ? 'credit' : 'debit',
