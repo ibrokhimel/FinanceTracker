@@ -270,6 +270,45 @@ export const MIGRATIONS = [
       if (!cols.includes('ai_chat')) db.exec('ALTER TABLE users ADD COLUMN ai_chat INTEGER DEFAULT 1;');
     },
   },
+  {
+    version: 13,
+    name: 'transfers_and_statement_import',
+    up: (db) => {
+      // Real transfer ledger — wallet→wallet moves that are NOT income/expense.
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS transfers (
+          id              INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id         INTEGER NOT NULL,
+          from_wallet     INTEGER,
+          to_wallet       INTEGER,
+          amount          REAL NOT NULL,
+          date            TEXT NOT NULL,
+          note            TEXT,
+          source          TEXT NOT NULL DEFAULT 'manual',
+          import_batch_id INTEGER,
+          created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (user_id)     REFERENCES users(id)   ON DELETE CASCADE,
+          FOREIGN KEY (from_wallet) REFERENCES wallets(id) ON DELETE SET NULL,
+          FOREIGN KEY (to_wallet)   REFERENCES wallets(id) ON DELETE SET NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_transfers_user ON transfers(user_id, date);
+
+        CREATE TABLE IF NOT EXISTS import_batches (
+          id          INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id     INTEGER NOT NULL,
+          source      TEXT NOT NULL DEFAULT 'screenshot',
+          created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+      `);
+      // Tag rows that came from a statement import so a whole batch can be undone.
+      const expCols = db.prepare("PRAGMA table_info(expenses)").all().map(c => c.name);
+      if (!expCols.includes('import_batch_id')) db.exec('ALTER TABLE expenses ADD COLUMN import_batch_id INTEGER;');
+      // Card labels a screenshot might show (e.g. "Humo *4821"), matched to a wallet.
+      const wCols = db.prepare("PRAGMA table_info(wallets)").all().map(c => c.name);
+      if (!wCols.includes('aliases')) db.exec('ALTER TABLE wallets ADD COLUMN aliases TEXT;');
+    },
+  },
 ];
 
 /* ─── Runner ─────────────────────────────────────────────────────────────── */

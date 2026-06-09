@@ -28,6 +28,7 @@ import { handleSettings, handleSettingsCallback } from './settings.js';
 import { handleChart } from './charts.js';
 import { handleInvestments } from './investments.js';
 import { handleConfirmReply } from './expenses.js';
+import { handlePhotoChoice, handleImportCommit, handleImportCancel, handleImportUndo } from './photo.js';
 
 import { getWallets, getWalletById, updateWalletType, transferBetweenWallets } from '../db/queries/wallets.js';
 import { getGoalById, setGoalStatus } from '../db/queries/goals.js';
@@ -236,6 +237,18 @@ export async function handleCallback(bot, query) {
         if (action === 'rm') { deleteInvestment(id); return toast(`🗑️ Removed ${h.symbol}`); }
         break;
       }
+
+      /* ── Photo: receipt vs statement ─────────────────────────────── */
+      case 'photo':
+        await handlePhotoChoice(bot, query, action === 'stmt' ? 'stmt' : 'receipt');
+        return;
+
+      /* ── Statement import: commit / cancel / undo ────────────────── */
+      case 'imp':
+        if (action === 'commit') return void await handleImportCommit(bot, query);
+        if (action === 'cancel') return void await handleImportCancel(bot, query);
+        if (action === 'undo')   return void await handleImportUndo(bot, query, args[0]);
+        return toast();
 
       /* ── Reports / menu / charts ─────────────────────────────────── */
       case 'rpt':

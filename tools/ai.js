@@ -332,6 +332,110 @@ export async function readReceipt(imageBuffer, mime = 'image/jpeg') {
   return { ok: false, error: errors.join(' | ') };
 }
 
+/* ─── Vision: bank statement (multi-transaction) ────────────────────────── */
+
+const STATEMENT_PROMPT = `You are reading a screenshot from a banking or payment app that lists transactions.
+Return ONLY JSON, no prose:
+{
+  "currency": "<ISO code or null>",
+  "transactions": [
+    {
+      "date": "YYYY-MM-DD or null",
+      "description": "<merchant / text shown>",
+      "amount": <positive number>,
+      "direction": "debit" | "credit",          // debit = money OUT, credit = money IN
+      "account": "<the card/account this row belongs to, e.g. '*4821', or null>",
+      "is_transfer": <true if this is a transfer between the user's OWN cards/accounts>,
+      "counterparty_account": "<the other card/account in a transfer, or null>"
+    }
+  ]
+}
+Rules:
+- One object per visible transaction row. Read EVERY row you can see.
+- "amount" is ALWAYS positive; encode in/out via "direction".
+- Money sent to/between the user's own cards ("transfer", "to card", "own account") → is_transfer true.
+- Use null for anything you can't read. If there are no transactions, return "transactions": [].`;
+
+async function geminiVision(prompt, imageBuffer, mime) {
+  const g = gemini();
+  if (!g) throw new Error('gemini not configured');
+  const tried = new Set();
+  const order = [config.ai.gemini.model, ...GEMINI_MODEL_CHAIN].filter(m => { if (!m || tried.has(m)) return false; tried.add(m); return true; });
+  let lastErr = null;
+  for (const modelName of order) {
+    try {
+      const model = g.getGenerativeModel({ model: modelName });
+      const result = await model.generateContent([
+        prompt,
+        { inlineData: { data: imageBuffer.toString('base64'), mimeType: mime } },
+      ]);
+      const text = result.response.text();
+      return JSON.parse(text.replace(/^```json\s*|\s*```$/g, '').trim());
+    } catch (err) {
+      lastErr = err;
+      if (!String(err.message).includes('404')) throw err;
+    }
+  }
+  throw lastErr || new Error('no gemini model available');
+}
+
+async function openrouterVision(prompt, imageBuffer, mime) {
+  if (!config.ai.openrouter.apiKey) throw new Error('openrouter not configured');
+  const dataUrl = `data:${mime};base64,${imageBuffer.toString('base64')}`;
+  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${config.ai.openrouter.apiKey}`,
+      'Content-Type': 'application/json',
+      'HTTP-Referer': 'https://github.com/financetracker-bot',
+      'X-Title': 'FinanceTracker',
+    },
+    body: JSON.stringify({
+      model: 'google/gemini-2.0-flash-exp:free',
+      messages: [{ role: 'user', content: [
+        { type: 'text', text: prompt },
+        { type: 'image_url', image_url: { url: dataUrl } },
+      ] }],
+      response_format: { type: 'json_object' },
+    }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json?.error?.message || `HTTP ${res.status}`);
+  const text = json.choices?.[0]?.message?.content || '';
+  return JSON.parse(text.replace(/^```json\s*|\s*```$/g, '').trim());
+}
+
+/**
+ * Read a bank/payment-app screenshot into a list of transactions.
+ * @returns {{ok:true, transactions:Array, currency:string|null, provider:string} | {ok:false, error:string}}
+ */
+export async function readStatement(imageBuffer, mime = 'image/jpeg', accountsHint = '') {
+  const prompt = accountsHint
+    ? `${STATEMENT_PROMPT}\n\nThe user's known accounts: ${accountsHint}. Use these labels for "account"/"counterparty_account" when a row matches one.`
+    : STATEMENT_PROMPT;
+
+  const errors = [];
+  for (const [name, fn] of [['gemini', geminiVision], ['openrouter', openrouterVision]]) {
+    try {
+      const json = await fn(prompt, imageBuffer, mime);
+      const txns = Array.isArray(json?.transactions) ? json.transactions : [];
+      const normalized = txns.map(t => ({
+        date: t.date || null,
+        description: String(t.description || '').slice(0, 120),
+        amount: Math.abs(Number(t.amount) || 0),
+        direction: t.direction === 'credit' ? 'credit' : 'debit',
+        account: t.account || null,
+        is_transfer: !!t.is_transfer,
+        counterparty_account: t.counterparty_account || null,
+      })).filter(t => t.amount > 0);
+      return { ok: true, transactions: normalized, currency: json?.currency || null, provider: name };
+    } catch (err) {
+      errors.push(`${name}: ${err.message}`);
+    }
+  }
+  return { ok: false, error: errors.join(' | ') };
+}
+
 /* ─── Free-form insight ─────────────────────────────────────────────────── */
 
 export async function insight(prompt) {

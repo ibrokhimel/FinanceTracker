@@ -48,7 +48,7 @@ Roadmap for upgrades, grouped by priority. Written after a full structural revie
   - Keep the text form working, but on any malformed input show a worked example (see 1.3).
   - Fix the "left" math display label so it's unambiguous (`3 of 5 uses left`).
 
-### 0.3 Headline feature — import bank-app screenshots (statement OCR)
+### 0.3 Headline feature — import bank-app screenshots (statement OCR) — ✅ DONE (see Shipped above)
 The big one. Today `handlers/photo.js` only reads a **single receipt** → one expense. The owner
 wants to send a **screenshot of their bank app's transaction list** and have everything documented,
 balances tracked per card, and internal card-to-card moves recognized.
@@ -79,7 +79,7 @@ balances tracked per card, and internal card-to-card moves recognized.
 **Schema work this implies (see 0.4):** a transfers/ledger table, a stable "card label → wallet"
 mapping, and an `import_batches` table so a whole screenshot import can be undone in one tap.
 
-### 0.4 Wallet model needs a real transfer ledger
+### 0.4 Wallet model needs a real transfer ledger — ✅ DONE (transfers table, migration v13)
 - Today `transferBetweenWallets` just does `balance += / -=` with **no record** of the movement
   (`db/queries/wallets.js`). There's no history, nothing to audit, and nothing for card-to-card
   detection to write into.
@@ -197,6 +197,26 @@ likely next replies pre-baked:
 - **Anomaly detection** ("this charge is 3× your usual at this merchant").
 
 ---
+
+## ✅ Shipped — bank-screenshot import (June 2026)
+
+- **P0.3 statement import + P0.4 transfer ledger — DONE.** Send a bank/payment-app
+  screenshot → tap **🏦 Bank statement** → the AI extracts every transaction
+  (`tools/ai.js readStatement`), then `tools/statement.js` classifies them:
+  - **Card-to-card transfers** between your own wallets are detected (model flag +
+    deterministic debit/credit pairing) and recorded in a new **transfers ledger**
+    (migration v13) — excluded from income/expense so they don't pollute spending.
+  - Debits → expenses, credits → income, auto-categorized.
+  - **Duplicates** (same date+amount+description already logged) are skipped.
+  - **Review-before-commit**: shows counts + preview with ✅ Import all / ❌ Discard,
+    and the whole batch is **undoable** in one tap (tagged `import_batch_id`).
+  - Wallets gained an `aliases` column so screenshot card labels (e.g. `*4821`) map
+    to the right wallet; balances adjust on transfer.
+  - Photos now ask **🧾 Receipt vs 🏦 Bank statement** so single receipts still work.
+  - Tested: classification logic + commit/undo + balance reconciliation (pure +
+    integration). **Needs a Gemini/OpenRouter vision key at runtime to read images.**
+  - Still open (follow-ups): interactive prompts for *unknown* cards, multi-image
+    album batching, and a UI to set wallet aliases.
 
 ## ✅ Shipped — quick-wins build (June 2026)
 
