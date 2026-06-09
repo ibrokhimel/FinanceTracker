@@ -41,6 +41,7 @@ export async function handleListExpenses(bot, msg) {
     const hasNext = expenses.length === Math.min(limit, 50);
     const rows = [
       ...expenseListActions(expenses).reply_markup.inline_keyboard,
+      [{ text: '🗑️ Delete all', callback_data: 'blk:askall' }],
       ...pagination('exp:p', 0, hasNext, false).reply_markup.inline_keyboard,
     ];
     await bot.sendMessage(chatId, text, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: rows } });

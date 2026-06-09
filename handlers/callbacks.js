@@ -32,6 +32,7 @@ import { handlePhotoChoice, handleImportCommit, handleImportCancel, handleImport
 import { handleChangelogHistory } from './changelog.js';
 import { handleActionConfirm } from './aiActions.js';
 import { handleInviteCallback } from './invite.js';
+import { handleBulkCallback } from './bulk.js';
 
 import { getWallets, getWalletById, updateWalletType, transferBetweenWallets } from '../db/queries/wallets.js';
 import { getGoalById, setGoalStatus } from '../db/queries/goals.js';
@@ -260,6 +261,11 @@ export async function handleCallback(bot, query) {
         if (action === 'cancel') return void await handleImportCancel(bot, query);
         if (action === 'undo')   return void await handleImportUndo(bot, query, args[0]);
         return toast();
+
+      /* ── Bulk delete / duplicates / undo (blk:*) ─────────────────── */
+      case 'blk':
+        await handleBulkCallback(bot, query, action, args);
+        return;
 
       /* ── Invites (iv:new | iv:new5 | iv:new7 | iv:rev:<code>) ─────── */
       case 'iv':

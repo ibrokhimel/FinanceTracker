@@ -50,6 +50,7 @@ import { handleAsk } from './handlers/ask.js';
 import { handleWhoami } from './handlers/whoami.js';
 import { handleChangelog } from './handlers/changelog.js';
 import { handleStats } from './handlers/stats.js';
+import { handleClear, handleDuplicates, handleReset } from './handlers/bulk.js';
 import { announceVersionIfChanged, VERSION } from './tools/version.js';
 import { initSmartReminders } from './tools/smartReminder.js';
 import { initFrictionSweeper } from './tools/friction.js';
@@ -128,6 +129,9 @@ registerRoutes(bot, {
   whoami:         handleWhoami,
   changelog:      handleChangelog,
   stats:          handleStats,
+  clear:          handleClear,
+  duplicates:     handleDuplicates,
+  reset:          handleReset,
 
   // Inline keyboard callback handler
   callback: handleCallback,

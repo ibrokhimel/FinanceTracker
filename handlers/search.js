@@ -4,6 +4,8 @@
 
 import { searchExpenses } from '../db/queries/expenses.js';
 import { formatAmount } from '../tools/formatter.js';
+import { setSession } from '../bot/session.js';
+import { inline } from '../bot/keyboards.js';
 
 /**
  * /search <keyword|amount> — search expenses by keyword, amount, or date.
@@ -45,8 +47,13 @@ export async function handleSearch(bot, msg) {
       text += `\n   📅 ${e.date}\n\n`;
     }
 
-    text += `Use \`/edit <id>\` to edit or \`/delete <id>\` to remove.`;
-    await bot.sendMessage(chatId, text, { parse_mode: 'Markdown' });
+    text += `Use \`/edit <id>\` to edit, or delete all matches below.`;
+    // Stash the matched ids so the "Delete results" button can remove them (no `flow`).
+    setSession(msg.from.id, { searchDeleteIds: results.map(e => e.id), userId });
+    await bot.sendMessage(chatId, text, {
+      parse_mode: 'Markdown',
+      ...inline([[{ text: `🗑️ Delete these ${results.length}`, callback_data: 'blk:search' }]]),
+    });
   } catch (err) {
     console.error('[search] error:', err.message);
     await bot.sendMessage(chatId, '❌ Could not complete search.');

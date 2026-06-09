@@ -15,6 +15,9 @@ export const COMMANDS = [
   { command: 'edit',          description: '✏️ Edit an expense' },
   { command: 'delete',        description: '🗑️ Delete an expense' },
   { command: 'undo',          description: '↩️ Restore last deleted entry' },
+  { command: 'clear',         description: '🗑️ Delete ALL entries (undoable)' },
+  { command: 'duplicates',    description: '♻️ Find & remove duplicate entries' },
+  { command: 'reset',         description: '🧨 Wipe all data (asks to confirm)' },
   { command: 'history',       description: '📜 Audit history for an entry' },
   { command: 'search',        description: '🔍 Search expenses (text or amount)' },
 

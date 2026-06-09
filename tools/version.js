@@ -13,9 +13,20 @@
  * Put the NEWEST entry first in CHANGELOG (index 0 = current release).
  */
 
-export const VERSION = '0.6.0';
+export const VERSION = '0.7.0';
 
 export const CHANGELOG = [
+  {
+    version: '0.7.0',
+    date: '2026-06-09',
+    title: 'Bulk delete & cleanup',
+    changes: [
+      '🗑️ /clear (or the "Delete all" button on /expenses) removes everything at once — fully undoable',
+      '🔎 /search now has a "Delete these" button to remove all matches',
+      '♻️ /duplicates finds and removes repeated entries, keeping one of each',
+      '🧨 /reset wipes your data after a typed confirmation (and sends a CSV backup first)',
+    ],
+  },
   {
     version: '0.6.0',
     date: '2026-06-09',

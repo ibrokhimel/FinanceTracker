@@ -157,6 +157,9 @@ export function registerRoutes(bot, handlers) {
   bot.onText(/^\/whoami/,                (msg) => { ensureUser(msg); handlers.whoami(bot, msg); });
   bot.onText(/^\/(changelog|whatsnew)/,  (msg) => { ensureUser(msg); if (handlers.changelog) handlers.changelog(bot, msg); });
   bot.onText(/^\/(stats|new)\b/,         (msg) => { ensureUser(msg); if (handlers.stats) handlers.stats(bot, msg); });
+  bot.onText(/^\/(clear)\b/,             (msg) => { ensureUser(msg); if (handlers.clear) handlers.clear(bot, msg); });
+  bot.onText(/^\/(duplicates|dupes)\b/,  (msg) => { ensureUser(msg); if (handlers.duplicates) handlers.duplicates(bot, msg); });
+  bot.onText(/^\/reset\b/,               (msg) => { ensureUser(msg); if (handlers.reset) handlers.reset(bot, msg); });
 
   /* ── Voice / Photo messages ────────────────────────────── */
 
@@ -254,6 +257,12 @@ export function registerRoutes(bot, handlers) {
           import('../handlers/flows.js').then(async (flows) => {
             await flows[fn](bot, msg, session);
           }).catch(err => console.error('[router] flow error:', err.message));
+          return;
+        }
+        case 'awaiting_reset_confirm': {
+          import('../handlers/bulk.js').then(async (bulk) => {
+            await bulk.handleResetConfirmReply(bot, msg, session);
+          }).catch(err => console.error('[router] reset flow error:', err.message));
           return;
         }
         default:

@@ -322,6 +322,25 @@ export const MIGRATIONS = [
       `);
     },
   },
+  {
+    version: 15,
+    name: 'bulk_batches',
+    up: (db) => {
+      // Undoable bulk actions. `payload` is the JSON of the deleted expense rows,
+      // so one ↩️ Undo re-inserts the whole batch (ids preserved).
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS bulk_batches (
+          id          INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id     INTEGER NOT NULL,
+          kind        TEXT NOT NULL,
+          payload     TEXT NOT NULL,
+          count       INTEGER NOT NULL DEFAULT 0,
+          created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+      `);
+    },
+  },
 ];
 
 /* ─── Runner ─────────────────────────────────────────────────────────────── */

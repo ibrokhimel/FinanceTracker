@@ -117,4 +117,5 @@ export const FLOWS = {
   AWAITING_WALLET_ALIAS: 'awaiting_wallet_alias',
   AWAITING_TRANSFER_AMOUNT: 'awaiting_transfer_amount',
   AWAITING_DELETE_CONFIRMATION: 'awaiting_delete_confirmation',
+  AWAITING_RESET_CONFIRM: 'awaiting_reset_confirm',
 };
