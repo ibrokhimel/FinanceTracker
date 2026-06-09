@@ -1,6 +1,6 @@
 /**
- * /score guard — an empty account should NOT get a (D) score; it should say
- * "not enough data". Once there's activity, it renders a real score card.
+ * /score — only scores dimensions you actually use, rescaled to 100, and refuses
+ * to grade until there's a substantive signal (budget/income/debt/goal).
  */
 import { describe, it, expect, beforeAll } from 'vitest';
 import path from 'path';
@@ -20,6 +20,7 @@ function bot() {
     sendChatAction: () => Promise.resolve(),
   };
 }
+const todayISO = () => new Date().toISOString().slice(0, 10);
 
 beforeAll(async () => {
   if (fs.existsSync(TMP_DB)) fs.unlinkSync(TMP_DB);
@@ -37,19 +38,25 @@ describe('handleScore', () => {
     const b = bot();
     await m.score.handleScore(b, { chat: { id: 7600 }, user });
     expect(b.calls.sendPhoto).toHaveLength(0);
-    expect(b.calls.sendMessage[0]).toMatch(/not enough data/i);
+    expect(b.calls.sendMessage[0]).toMatch(/not enough/i);
   });
 
-  it('scores once there is recent activity (3+ distinct days)', async () => {
-    const recent = new Date().toISOString().slice(0, 10);
-    const d2 = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
-    const d3 = new Date(Date.now() - 2 * 86400000).toISOString().slice(0, 10);
-    for (const d of [recent, d2, d3]) m.exp.addExpense({ user_id: user.id, amount: 10000, note: 'x', date: d, type: 'expense' });
+  it('a few expense-days alone are NOT enough (no substantive dimension)', async () => {
+    for (let i = 0; i < 3; i++) {
+      m.exp.addExpense({ user_id: user.id, amount: 10000, note: 'x', date: new Date(Date.now() - i * 86400000).toISOString().slice(0, 10), type: 'expense' });
+    }
     const b = bot();
     await m.score.handleScore(b, { chat: { id: 7600 }, user });
-    // a real score is rendered (photo) — or the text fallback, but never the "not enough data" notice
-    const saidNoData = (b.calls.sendMessage[0] || '').match(/not enough data/i);
-    expect(saidNoData).toBeFalsy();
+    expect(b.calls.sendPhoto).toHaveLength(0);
+    expect(b.calls.sendMessage[0]).toMatch(/not enough/i);
+  });
+
+  it('scores once there is a substantive dimension (income)', async () => {
+    m.exp.addExpense({ user_id: user.id, amount: 500000, note: 'salary', date: todayISO(), type: 'income' });
+    const b = bot();
+    await m.score.handleScore(b, { chat: { id: 7600 }, user });
+    const saidNo = (b.calls.sendMessage[0] || '').match(/not enough/i);
+    expect(saidNo).toBeFalsy();
     expect(b.calls.sendPhoto.length + b.calls.sendMessage.length).toBeGreaterThan(0);
   });
 });

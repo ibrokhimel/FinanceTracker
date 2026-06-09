@@ -13,9 +13,17 @@
  * Put the NEWEST entry first in CHANGELOG (index 0 = current release).
  */
 
-export const VERSION = '0.7.2';
+export const VERSION = '0.7.3';
 
 export const CHANGELOG = [
+  {
+    version: '0.7.3',
+    date: '2026-06-09',
+    title: 'Honest score',
+    changes: [
+      '💯 /score now only grades the dimensions you actually use (budget, savings, debt, streak, goals) and rescales to 100 — no more filler points; each line shows why',
+    ],
+  },
   {
     version: '0.7.2',
     date: '2026-06-09',
