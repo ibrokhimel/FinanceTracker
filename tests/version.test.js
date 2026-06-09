@@ -38,12 +38,32 @@ describe('announceVersionIfChanged', () => {
     const sends = [];
     const bot = { sendMessage: (id, t) => { sends.push(id); return Promise.resolve(); } };
     const r = await m.version.announceVersionIfChanged(bot);
-    expect(r.announced).toBe(true);
-    expect(sends).toHaveLength(0); // first boot: announced_version was null
+    expect(r.announced).toBe(false);
+    expect(sends).toHaveLength(0); // first boot: announced_version was null → never broadcasts
     expect(m.meta.getMeta('announced_version')).toBe(m.version.VERSION);
   });
 
-  it('on a version bump, messages approved users exactly once', async () => {
+  it('isFeatureRelease: minor/major notify, patch is silent', () => {
+    expect(m.version.isFeatureRelease('0.7.0', '0.8.0')).toBe(true);  // minor
+    expect(m.version.isFeatureRelease('0.7.0', '1.0.0')).toBe(true);  // major
+    expect(m.version.isFeatureRelease('0.7.0', '0.7.1')).toBe(false); // patch
+    expect(m.version.isFeatureRelease(null, '0.7.0')).toBe(false);    // fresh install
+  });
+
+  it('a PATCH bump records the version but does NOT message anyone', async () => {
+    m.meta.setMeta('announced_version', '0.7.0');
+    const VER = m.version.VERSION;
+    // Only meaningful when current VERSION is a patch ahead of 0.7.0 (same major.minor).
+    if (m.version.isFeatureRelease('0.7.0', VER)) return; // skip if we're on a feature release
+    const sends = [];
+    const bot = { sendMessage: (id) => { sends.push(id); return Promise.resolve(); } };
+    const r = await m.version.announceVersionIfChanged(bot);
+    expect(r.announced).toBe(false);
+    expect(sends).toHaveLength(0);
+    expect(m.meta.getMeta('announced_version')).toBe(VER);
+  });
+
+  it('on a feature (minor/major) bump, messages approved users exactly once', async () => {
     // two approved users + simulate an older announced version
     const u1 = m.users.findOrCreateUser(101, 'A', 'a');
     const u2 = m.users.findOrCreateUser(102, 'B', 'b');

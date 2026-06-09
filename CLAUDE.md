@@ -18,10 +18,13 @@ The bot has a single source-of-truth version in **`tools/version.js`** (`VERSION
 3. (Optional) keep `package.json` "version" in sync.
 
 On boot, `announceVersionIfChanged(bot)` compares `VERSION` against the last
-announced version (stored in DB table `app_meta`, key `announced_version`). If it
-changed, it messages every **approved** user that the bot upgraded and points them
-to `/changelog`. It records the new version so each version is announced only once.
-Users read the details with `/changelog` (or `/whatsnew`).
+announced version (stored in DB table `app_meta`, key `announced_version`).
+**Broadcast policy:** it messages every **approved** user ONLY for *feature
+releases* — a MAJOR or MINOR bump (e.g. 0.7.x → 0.8.0). **PATCH bumps (0.7.0 →
+0.7.1) are silent** — the version is still recorded, but users aren't pinged. So:
+use a PATCH bump for bug fixes / tiny tweaks (no notification), and a MINOR bump
+when you want users to be told about new features. Fresh installs never broadcast.
+Users can always read details with `/changelog` (or `/whatsnew`).
 
 If you forget to bump the version, users won't be told anything changed.
 

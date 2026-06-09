@@ -40,8 +40,11 @@ describe('handleScore', () => {
     expect(b.calls.sendMessage[0]).toMatch(/not enough data/i);
   });
 
-  it('scores once there is activity', async () => {
-    for (let i = 0; i < 3; i++) m.exp.addExpense({ user_id: user.id, amount: 10000, note: 'x', date: '2026-06-05', type: 'expense' });
+  it('scores once there is recent activity (3+ distinct days)', async () => {
+    const recent = new Date().toISOString().slice(0, 10);
+    const d2 = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    const d3 = new Date(Date.now() - 2 * 86400000).toISOString().slice(0, 10);
+    for (const d of [recent, d2, d3]) m.exp.addExpense({ user_id: user.id, amount: 10000, note: 'x', date: d, type: 'expense' });
     const b = bot();
     await m.score.handleScore(b, { chat: { id: 7600 }, user });
     // a real score is rendered (photo) — or the text fallback, but never the "not enough data" notice

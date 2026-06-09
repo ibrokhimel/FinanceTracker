@@ -67,12 +67,19 @@ function goalScore(userId) {
   return Math.round((onTrack / gs.length) * 10);
 }
 
-/** True only if there's enough real activity to score (don't grade an empty account). */
+/**
+ * Enough to score? Requires *recent* or *configured* signal — otherwise every
+ * component falls back to its neutral baseline and you'd get a meaningless ~47/D.
+ * Old, stale entries alone don't count.
+ */
 function hasEnoughData(userId) {
-  const e = getDb().prepare("SELECT COUNT(*) AS c FROM expenses WHERE user_id = ?").get(userId).c;
-  const b = getDb().prepare("SELECT COUNT(*) AS c FROM budgets WHERE user_id = ? AND amount > 0").get(userId).c;
-  const g = getDb().prepare("SELECT COUNT(*) AS c FROM goals WHERE user_id = ? AND status = 'active'").get(userId).c;
-  return e >= 3 || b > 0 || g > 0; // a few entries, or any budget/goal set
+  const db = getDb();
+  const since30 = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+  const recentDays = db.prepare("SELECT COUNT(DISTINCT date) AS d FROM expenses WHERE user_id = ? AND date >= ?").get(userId, since30).d;
+  const budgets = db.prepare("SELECT COUNT(*) AS c FROM budgets WHERE user_id = ? AND amount > 0").get(userId).c;
+  const goals = db.prepare("SELECT COUNT(*) AS c FROM goals WHERE user_id = ? AND status = 'active'").get(userId).c;
+  const debts = db.prepare("SELECT COUNT(*) AS c FROM debts WHERE user_id = ? AND status != 'fully_repaid'").get(userId).c;
+  return recentDays >= 3 || budgets > 0 || goals > 0 || debts > 0;
 }
 
 export async function handleScore(bot, msg) {

@@ -13,9 +13,18 @@
  * Put the NEWEST entry first in CHANGELOG (index 0 = current release).
  */
 
-export const VERSION = '0.7.1';
+export const VERSION = '0.7.2';
 
 export const CHANGELOG = [
+  {
+    version: '0.7.2',
+    date: '2026-06-09',
+    title: 'Quieter updates',
+    changes: [
+      '🔔 Upgrade notifications now only go out for feature releases — small bug-fix patches update silently',
+      '💯 /score now needs recent activity (not just old entries) before it grades you',
+    ],
+  },
   {
     version: '0.7.1',
     date: '2026-06-09',
@@ -108,9 +117,20 @@ export function formatChangelog(entry = latestChanges()) {
   return `🆕 *What's new in v${entry.version}* — _${entry.title}_\n_${entry.date}_\n\n${lines}`;
 }
 
+/** A "feature release" = a MAJOR or MINOR bump. PATCH bumps (x.y.Z) are silent. */
+export function isFeatureRelease(prev, next) {
+  if (!prev) return false;
+  const p = String(prev).split('.').map(Number);
+  const n = String(next).split('.').map(Number);
+  if ((n[0] || 0) !== (p[0] || 0)) return true;       // major
+  if ((n[1] || 0) !== (p[1] || 0)) return true;       // minor
+  return false;                                        // patch only → don't notify
+}
+
 /**
- * On boot: if VERSION differs from the last announced version, message every
- * approved user and record the new version so it only announces once.
+ * On boot: record the new version, and broadcast to approved users ONLY for
+ * feature releases (minor/major). Patch fixes bump silently. Fresh installs
+ * never broadcast. Records the version either way so it announces at most once.
  * Never throws — broadcast failures (blocked users, etc.) are ignored.
  */
 export async function announceVersionIfChanged(bot) {
@@ -121,22 +141,21 @@ export async function announceVersionIfChanged(bot) {
     const announced = getMeta('announced_version');
     if (announced === VERSION) return { announced: false };
 
-    const entry = latestChanges();
-    const msg =
-      `🚀 *FinanceBot upgraded to v${VERSION}*\n_${entry?.title || ''}_\n\n` +
-      `Want to see what changed? Send /changelog`;
-
+    const notify = isFeatureRelease(announced, VERSION);
     let sent = 0;
-    if (announced !== null) { // don't spam on a brand-new install (first boot)
-      const users = listUsersByStatus('approved');
-      for (const u of users) {
+    if (notify) {
+      const entry = latestChanges();
+      const msg =
+        `🚀 *FinanceBot upgraded to v${VERSION}*\n_${entry?.title || ''}_\n\n` +
+        `Want to see what changed? Send /changelog`;
+      for (const u of listUsersByStatus('approved')) {
         if (!u.telegram_id) continue;
         try { await bot.sendMessage(u.telegram_id, msg, { parse_mode: 'Markdown' }); sent++; }
         catch { /* blocked / chat gone — skip */ }
       }
     }
     setMeta('announced_version', VERSION);
-    return { announced: true, sent };
+    return { announced: notify, sent };
   } catch (err) {
     console.warn('[version] announce failed:', err.message);
     return { announced: false, error: err.message };
