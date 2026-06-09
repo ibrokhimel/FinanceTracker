@@ -30,6 +30,12 @@ export async function handlePredict(bot, msg) {
       ? prevMonths.reduce((s, m) => s + m.expenses, 0) / prevMonths.length
       : 0;
 
+    if (!spentThisMonth && !previousAvg) {
+      return bot.sendMessage(chatId,
+        `🔮 *Not enough data yet*\n\nLog a few expenses first and I'll forecast your month.\nTry: \`lunch 25000\` or \`/add 25000 lunch\``,
+        { parse_mode: 'Markdown' });
+    }
+
     const prediction = predict(spentThisMonth, currentDay, daysInMonth, previousAvg);
     const text = formatPrediction(prediction, monthStr);
 

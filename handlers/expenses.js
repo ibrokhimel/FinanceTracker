@@ -90,8 +90,8 @@ export async function handleTextMessage(bot, msg) {
       const user = getUser(userId);
       if (user?.ai_chat === 0) return;          // user opted out of chat
       if (isTrivial(text)) return;              // skip greetings/acks
-      const { answerFinanceQuestion } = await import('./ask.js');
-      await answerFinanceQuestion(bot, msg, text);
+      const { handleAiTurn } = await import('./aiActions.js');
+      await handleAiTurn(bot, msg, text);       // answers questions OR proposes a data action
       return;
     }
 

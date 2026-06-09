@@ -73,7 +73,7 @@ async function showWallets(bot, chatId, userId) {
   if (!wallets.length) {
     return bot.sendMessage(chatId,
       `💳 *Wallets*\n\nNo wallets yet — tap below to create one.`,
-      { parse_mode: 'Markdown', ...walletsActions() }
+      { parse_mode: 'Markdown', ...walletsActions([]) }
     );
   }
 
@@ -86,7 +86,8 @@ async function showWallets(bot, chatId, userId) {
   }
 
   text += `\n━━━━━━━━━━━━━━\n💵 *Total:* ${formatAmount(total)}`;
-  await bot.sendMessage(chatId, text, { parse_mode: 'Markdown', ...walletsActions() });
+  text += `\n\n🏷️ _Tap a wallet to set its card label (e.g. *4821) so screenshots map to it._`;
+  await bot.sendMessage(chatId, text, { parse_mode: 'Markdown', ...walletsActions(wallets) });
 }
 
 function parseAmount(str) {

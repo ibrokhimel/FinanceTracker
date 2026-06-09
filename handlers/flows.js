@@ -11,7 +11,7 @@
 import { setSession, clearSession, FLOWS } from '../bot/session.js';
 import { formatAmount, progressBar } from '../tools/formatter.js';
 import { walletTypePicker } from '../bot/keyboards.js';
-import { createWallet, getWallets, transferBetweenWallets } from '../db/queries/wallets.js';
+import { createWallet, getWallets, getWalletById, updateWalletAliases, transferBetweenWallets } from '../db/queries/wallets.js';
 import { createGoal, updateGoalProgress, getGoals } from '../db/queries/goals.js';
 import { createDebt, repayDebt, getDebtById } from '../db/queries/debts.js';
 
@@ -40,6 +40,18 @@ export async function handleWalletNameReply(bot, msg, session) {
   await bot.sendMessage(chatId,
     `✅ *Wallet created:* ${wallet.name}\n\nWhat type is it?`,
     { parse_mode: 'Markdown', ...walletTypePicker(wallet.id) });
+}
+
+export async function handleWalletAliasReply(bot, msg, session) {
+  const chatId = msg.chat.id;
+  const userId = session.userId || msg.user?.id;
+  clearSession(msg.from.id);
+  if (!userId) return;
+  const w = getWalletById(session.walletId);
+  if (!w || w.user_id !== userId) return bot.sendMessage(chatId, '❌ That wallet no longer exists.');
+  const aliases = msg.text.trim().slice(0, 80);
+  updateWalletAliases(w.id, aliases);
+  await bot.sendMessage(chatId, `🏷️ *${w.name}* will now match: ${aliases}\nBank-statement rows on this card map here automatically.`, { parse_mode: 'Markdown' });
 }
 
 export async function handleTransferAmountReply(bot, msg, session) {

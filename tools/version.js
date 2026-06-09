@@ -13,9 +13,20 @@
  * Put the NEWEST entry first in CHANGELOG (index 0 = current release).
  */
 
-export const VERSION = '0.3.0';
+export const VERSION = '0.4.0';
 
 export const CHANGELOG = [
+  {
+    version: '0.4.0',
+    date: '2026-06-09',
+    title: 'AI that acts + invite buttons + my-cards',
+    changes: [
+      '🤖 Just tell the bot what to do — "add 50k lunch", "set food budget to 1m", "delete expense 5" — it confirms, then does it',
+      '🎟️ /invite is now button-driven (create 1/5-use or 7-day links, revoke with a tap)',
+      '🏷️ Set a card label on each wallet so bank-statement imports map to the right one',
+      '💡 Clearer "here\'s how to use it" replies when a command is mistyped',
+    ],
+  },
   {
     version: '0.3.0',
     date: '2026-06-09',

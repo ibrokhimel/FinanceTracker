@@ -20,6 +20,11 @@ export function updateWalletType(walletId, type) {
   return getWalletById(walletId);
 }
 
+export function updateWalletAliases(walletId, aliases) {
+  getDb().prepare("UPDATE wallets SET aliases = ?, updated_at = datetime('now') WHERE id = ?").run(aliases || null, walletId);
+  return getWalletById(walletId);
+}
+
 export function updateWalletBalance(walletId, delta) {
   getDb().prepare("UPDATE wallets SET balance = balance + ?, updated_at = datetime('now') WHERE id = ?").run(delta, walletId);
 }

@@ -33,7 +33,7 @@ Roadmap for upgrades, grouped by priority. Written after a full structural revie
 - **Also:** `/score` has no explanation of *why* you got each sub-score and no buttons to drill in.
   Add a short "how to improve" line per component and a "📊 See report" button.
 
-### 0.2 `/invite` — works but feels broken (discoverability + rigid syntax)
+### 0.2 `/invite` — works but feels broken (discoverability + rigid syntax) — ✅ DONE (button-driven, see Shipped above)
 - **Reality:** `/invite create` *already* exists (aliased to `new` in `handlers/invite.js:45`).
   The problem is it's undiscoverable and unforgiving:
   - no inline buttons anywhere — everything is typed,
@@ -197,6 +197,26 @@ likely next replies pre-baked:
 - **Anomaly detection** ("this charge is 3× your usual at this merchant").
 
 ---
+
+## ✅ Shipped — feature completion (June 2026)
+
+All remaining **owner-requested** features are now implemented:
+
+- **P0.2 `/invite` — DONE.** Button-driven: ➕ 1-use / 5-use / 7-day create buttons and
+  🗑️ Revoke per active link; forgiving expiry parsing (`7`, `7d`, `1w`, `1m`); clearer
+  "X of Y uses left" label. Text form still works. (`handlers/invite.js`, namespace `iv`)
+- **P1.3 usage-on-misuse — DONE (rolled out).** `tools/commandHelp.js` + example-rich error
+  messages across settings, whatif, edit, predict (now guards no-data), etc.
+- **P1.5 per-user "my cards" — DONE.** Each wallet has editable card aliases (tap a wallet in
+  `/wallets` → set `*4821` etc.); bank-statement import uses them to map rows to the right
+  wallet. (migration v13 `wallets.aliases`, flow `awaiting_wallet_alias`)
+- **P1.6 AI can edit/add data — DONE.** Just say "add 50k lunch", "set food budget to 1m",
+  "put 100k toward my Trip goal", "delete expense 5" — the AI proposes the action with a
+  ✅ Do it / ❌ No confirm, then writes it (audited; deletes are /undo-able).
+  (`handlers/aiActions.js` — one LLM call decides action-vs-answer.)
+
+> Note: the P2/P3 items below are internal polish / long-term ideas (added during review),
+> not owner requests, and are intentionally left for later.
 
 ## ✅ Shipped — bank-screenshot import (June 2026)
 

@@ -15,7 +15,7 @@ import { getBudgets } from '../db/queries/budgets.js';
 import { getGoals } from '../db/queries/goals.js';
 import { formatAmount } from '../tools/formatter.js';
 
-function buildContext(userId) {
+export function buildContext(userId) {
   const today = new Date().toISOString().slice(0, 10);
   const monthStart = today.slice(0, 7) + '-01';
   const last30 = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
@@ -91,5 +91,6 @@ export async function handleAsk(bot, msg) {
       { parse_mode: 'Markdown' });
   }
 
-  await answerFinanceQuestion(bot, msg, question);
+  const { handleAiTurn } = await import('./aiActions.js');
+  await handleAiTurn(bot, msg, question);
 }

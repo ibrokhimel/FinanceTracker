@@ -30,6 +30,8 @@ import { handleInvestments } from './investments.js';
 import { handleConfirmReply } from './expenses.js';
 import { handlePhotoChoice, handleImportCommit, handleImportCancel, handleImportUndo } from './photo.js';
 import { handleChangelogHistory } from './changelog.js';
+import { handleActionConfirm } from './aiActions.js';
+import { handleInviteCallback } from './invite.js';
 
 import { getWallets, getWalletById, updateWalletType, transferBetweenWallets } from '../db/queries/wallets.js';
 import { getGoalById, setGoalStatus } from '../db/queries/goals.js';
@@ -151,6 +153,14 @@ export async function handleCallback(bot, query) {
           await prompt('💸 How much to transfer?');
           return toast();
         }
+        if (action === 'alias') {
+          const id = parseInt(args[0], 10);
+          const w = getWalletById(id);
+          if (!w || w.user_id !== user.id) return toast('Not found');
+          setSession(query.from.id, { flow: FLOWS.AWAITING_WALLET_ALIAS, walletId: id, userId: user.id });
+          await prompt(`🏷️ Send the card number/label for *${w.name}* (e.g. \`*4821\`), comma-separated for several.`);
+          return toast();
+        }
         break;
       }
 
@@ -250,6 +260,16 @@ export async function handleCallback(bot, query) {
         if (action === 'cancel') return void await handleImportCancel(bot, query);
         if (action === 'undo')   return void await handleImportUndo(bot, query, args[0]);
         return toast();
+
+      /* ── Invites (iv:new | iv:new5 | iv:new7 | iv:rev:<code>) ─────── */
+      case 'iv':
+        await handleInviteCallback(bot, query, action, args);
+        return toast();
+
+      /* ── AI action confirm (act:yes | act:no) ────────────────────── */
+      case 'act':
+        await handleActionConfirm(bot, query, action === 'yes');
+        return;
 
       /* ── Changelog history ───────────────────────────────────────── */
       case 'log':

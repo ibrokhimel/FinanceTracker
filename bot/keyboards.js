@@ -175,11 +175,16 @@ export function nudgePicker() {
 
 /* ─── Wallets ───────────────────────────────────────────────────────────── */
 
-export function walletsActions() {
-  return inline([[
+export function walletsActions(wallets = []) {
+  const rows = wallets.slice(0, 6).map(w => [{
+    text: `🏷️ ${clip(w.name, 14)}${w.aliases ? ` · ${clip(w.aliases, 10)}` : ' — set card'}`,
+    callback_data: `wal:alias:${w.id}`,
+  }]);
+  rows.push([
     { text: '➕ New wallet', callback_data: 'wal:new' },
     { text: '🔁 Transfer',   callback_data: 'wal:tx' },
-  ]]);
+  ]);
+  return inline(rows);
 }
 
 export function walletTypePicker(walletId) {
@@ -271,6 +276,20 @@ export function expenseListActions(expenses = [], cap = 8) {
     text: `🗑️ #${e.id} · ${clip(e.cat_name || e.note || 'entry', 16)}`,
     callback_data: `exp:del:${e.id}`,
   }]);
+  return inline(rows);
+}
+
+/* ─── Invites ───────────────────────────────────────────────────────────── */
+
+export function inviteActions(invites = []) {
+  const rows = [[
+    { text: '➕ 1-use link', callback_data: 'iv:new' },
+    { text: '➕ 5-use', callback_data: 'iv:new5' },
+    { text: '➕ 7-day', callback_data: 'iv:new7' },
+  ]];
+  for (const inv of invites.filter(i => i.status === 'active').slice(0, 6)) {
+    rows.push([{ text: `🗑️ Revoke ${inv.code}`, callback_data: `iv:rev:${inv.code}` }]);
+  }
   return inline(rows);
 }
 

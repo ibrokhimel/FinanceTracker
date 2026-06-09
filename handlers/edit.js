@@ -110,7 +110,9 @@ export async function handleEditExpense(bot, msg) {
         break;
       }
       default:
-        await bot.sendMessage(chatId, `❌ Unknown field "${field}". Use: amount, note, category, or date.`);
+        await bot.sendMessage(chatId,
+          `❌ Unknown field "${field}".\n\n*Try:*\n\`/edit ${id} amount 30000\`\n\`/edit ${id} category food\`\n\`/edit ${id} note coffee\`\n\`/edit ${id} date yesterday\``,
+          { parse_mode: 'Markdown' });
     }
   } catch (err) {
     console.error('[edit] error:', err.message);

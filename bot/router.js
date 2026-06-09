@@ -231,6 +231,7 @@ export function registerRoutes(bot, handlers) {
         }
         // Button-initiated flows (handlers/flows.js)
         case 'awaiting_wallet_name':
+        case 'awaiting_wallet_alias':
         case 'awaiting_transfer_amount':
         case 'awaiting_goal_name':
         case 'awaiting_goal_amount':
@@ -238,6 +239,7 @@ export function registerRoutes(bot, handlers) {
         case 'awaiting_debt_amount': {
           const fnByFlow = {
             awaiting_wallet_name:     'handleWalletNameReply',
+            awaiting_wallet_alias:    'handleWalletAliasReply',
             awaiting_transfer_amount: 'handleTransferAmountReply',
             awaiting_goal_name:       'handleGoalNameReply',
             awaiting_goal_amount:     'handleGoalAmountReply',
