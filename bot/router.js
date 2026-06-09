@@ -156,6 +156,7 @@ export function registerRoutes(bot, handlers) {
   bot.onText(/^\/ask(?:\s+|$)/,          (msg) => { ensureUser(msg); handlers.ask(bot, msg); });
   bot.onText(/^\/whoami/,                (msg) => { ensureUser(msg); handlers.whoami(bot, msg); });
   bot.onText(/^\/(changelog|whatsnew)/,  (msg) => { ensureUser(msg); if (handlers.changelog) handlers.changelog(bot, msg); });
+  bot.onText(/^\/(stats|new)\b/,         (msg) => { ensureUser(msg); if (handlers.stats) handlers.stats(bot, msg); });
 
   /* ── Voice / Photo messages ────────────────────────────── */
 

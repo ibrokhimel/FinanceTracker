@@ -49,6 +49,7 @@ import { handleUsage } from './handlers/usage.js';
 import { handleAsk } from './handlers/ask.js';
 import { handleWhoami } from './handlers/whoami.js';
 import { handleChangelog } from './handlers/changelog.js';
+import { handleStats } from './handlers/stats.js';
 import { announceVersionIfChanged, VERSION } from './tools/version.js';
 import { initSmartReminders } from './tools/smartReminder.js';
 import { initFrictionSweeper } from './tools/friction.js';
@@ -126,6 +127,7 @@ registerRoutes(bot, {
   ask:            handleAsk,
   whoami:         handleWhoami,
   changelog:      handleChangelog,
+  stats:          handleStats,
 
   // Inline keyboard callback handler
   callback: handleCallback,

@@ -13,9 +13,17 @@
  * Put the NEWEST entry first in CHANGELOG (index 0 = current release).
  */
 
-export const VERSION = '0.4.0';
+export const VERSION = '0.5.0';
 
 export const CHANGELOG = [
+  {
+    version: '0.5.0',
+    date: '2026-06-09',
+    title: 'Stats dashboard',
+    changes: [
+      '📊 New /stats (also /new) — bot version + last update, plus your data snapshot (this-month spend/income, totals, wallets, goals, budgets)',
+    ],
+  },
   {
     version: '0.4.0',
     date: '2026-06-09',

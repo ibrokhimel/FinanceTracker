@@ -54,6 +54,7 @@ export const COMMANDS = [
   // Account
   { command: 'whoami',        description: '🪪 Your status / role / Telegram ID' },
   { command: 'changelog',     description: "🆕 What's new in this version" },
+  { command: 'stats',         description: '📊 Bot version + your data snapshot' },
   { command: 'usage',         description: '📊 Rate-limit + AI token usage' },
   { command: 'invite',        description: '🎟️ Generate a sharable invite link' },
   { command: 'admin',         description: '👑 Admin panel (admin only)' },
