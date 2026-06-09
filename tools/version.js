@@ -13,9 +13,17 @@
  * Put the NEWEST entry first in CHANGELOG (index 0 = current release).
  */
 
-export const VERSION = '0.7.0';
+export const VERSION = '0.7.1';
 
 export const CHANGELOG = [
+  {
+    version: '0.7.1',
+    date: '2026-06-09',
+    title: 'Fixes',
+    changes: [
+      '💯 /score no longer invents a "D" for an empty account — it now asks you to log some data first',
+    ],
+  },
   {
     version: '0.7.0',
     date: '2026-06-09',

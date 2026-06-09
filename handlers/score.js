@@ -67,10 +67,24 @@ function goalScore(userId) {
   return Math.round((onTrack / gs.length) * 10);
 }
 
+/** True only if there's enough real activity to score (don't grade an empty account). */
+function hasEnoughData(userId) {
+  const e = getDb().prepare("SELECT COUNT(*) AS c FROM expenses WHERE user_id = ?").get(userId).c;
+  const b = getDb().prepare("SELECT COUNT(*) AS c FROM budgets WHERE user_id = ? AND amount > 0").get(userId).c;
+  const g = getDb().prepare("SELECT COUNT(*) AS c FROM goals WHERE user_id = ? AND status = 'active'").get(userId).c;
+  return e >= 3 || b > 0 || g > 0; // a few entries, or any budget/goal set
+}
+
 export async function handleScore(bot, msg) {
   const chatId = msg.chat.id;
   const userId = msg.user?.id;
   if (!userId) return;
+
+  if (!hasEnoughData(userId)) {
+    return bot.sendMessage(chatId,
+      `📊 *Not enough data to score yet*\n\nLog a few expenses (and set a budget or goal) and I'll grade your financial health.\nTry: \`lunch 25000\`, \`/budget\`, or \`/goals\`.`,
+      { parse_mode: 'Markdown' });
+  }
 
   const subs = {
     Budget:   budgetScore(userId),
